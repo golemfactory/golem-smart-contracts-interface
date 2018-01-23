@@ -1,0 +1,7 @@
+.cache
+.idea
+.eggs
+*.egg-info
+__pycache__
+*.py[co]
+*.sw[ponm]
