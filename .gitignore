@@ -5,3 +5,7 @@
 __pycache__
 *.py[co]
 *.sw[ponm]
+
+build/
+dist/
+sdist/
