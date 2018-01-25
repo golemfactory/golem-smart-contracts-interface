@@ -12,7 +12,7 @@ setup(
     python_requires='>=3.5',
     install_requires=[
         'ethereum==1.6.1',
-        'eth_utils',
+        'ethereum-utils==0.5.1',
         'pytz',
     ],
     tests_require=[
