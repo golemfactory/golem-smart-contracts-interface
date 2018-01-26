@@ -6,7 +6,7 @@ from os import urandom
 from ethereum.utils import privtoaddr
 
 from golem_sci.token import GNTWToken, encode_payments
-from eth_utils import decode_hex, encode_hex
+from eth_utils import decode_hex, encode_hex, to_checksum_address
 
 
 def mock_payment(value: int=1, payee=None):
@@ -55,7 +55,7 @@ class GNTWTokenTest(unittest.TestCase):
 
         def client_call(_from, to, data, block):
             self.assertEqual('pending', block)
-            token_addr = decode_hex(to)
+            token_addr = to
             data = json.loads(decode_hex(data).decode())
             if data['function_name'] == 'balanceOf':
                 self.assertEqual(1, len(data['args']))
@@ -83,7 +83,7 @@ class GNTWTokenTest(unittest.TestCase):
         self.transfer_called = False
 
         def client_send(tx):
-            token_addr = tx.to
+            token_addr = to_checksum_address(encode_hex(tx.to))
             data = json.loads(tx.data)
             self.assertEqual(self.nonce, tx.nonce)
             self.nonce += 1
@@ -142,7 +142,10 @@ class GNTWTokenTest(unittest.TestCase):
         closure_time = 0
         tx = self.token.batch_transfer(self.privkey, [p1, p2, p3], closure_time)
         self.assertEqual(self.nonce, tx.nonce)
-        self.assertEqual(self.token.GNTW_ADDRESS, tx.to)
+        self.assertEqual(
+            self.token.GNTW_ADDRESS,
+            to_checksum_address(encode_hex(tx.to)),
+        )
         self.assertEqual(0, tx.value)
         expected_gas = self.token.GAS_BATCH_PAYMENT_BASE + \
             3 * self.token.GAS_PER_PAYMENT
