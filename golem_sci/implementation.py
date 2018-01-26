@@ -47,14 +47,31 @@ class SCIImplementation(SmartContractsInterface):
                                closure_time: int) -> Transaction:
         return self._token.batch_transfer(privkey, payments, closure_time)
 
+    def get_incoming_batch_tranfers(
+            self,
+            payer_address: str,
+            payee_address: str,
+            from_block: int,
+            to_block: int) -> List[BatchTransferEvent]:
+        logs = self._geth_client.get_logs(
+            from_block=from_block,
+            to_block=to_block,
+            address=self._token.GNTW_ADDRESS,
+            topics=[self._token.TRANSFER_EVENT_ID, payer_address, payee_address]
+        )
+
+        return [self._raw_log_to_batch_event(raw_log) for raw_log in logs]
+
     def subscribe_to_incoming_batch_transfers(
             self,
             address: str,
             cb: callable(BatchTransferEvent),
             required_confs: int) -> None:
         with self._subs_lock:
-            filter_id = \
-                self._token.get_incoming_batch_transfers_filter(address)
+            filter_id = self._geth_client.new_filter(
+                address=self._token.GNTW_ADDRESS,
+                topics=[self._token.TRANSFER_EVENT_ID, None, address],
+            )
             self._subscriptions.append((filter_id, cb, required_confs))
 
     def send_transaction(self, tx: Transaction):
@@ -87,6 +104,15 @@ class SCIImplementation(SmartContractsInterface):
                 logger.error(e)
             time.sleep(15)
 
+    @classmethod
+    def _raw_log_to_batch_event(cls, raw_log) -> BatchTransferEvent:
+        return BatchTransferEvent(
+            tx_hash=raw_log['transactionHash'],
+            sender='0x' + raw_log['topics'][1][26:],
+            amount=int(raw_log['data'][2:66], 16),
+            closure_time=int(raw_log['data'][66:130], 16),
+        )
+
     def _pull_changes_from_blockchain(self) -> None:
         with self._subs_lock:
             subs = self._subscriptions
@@ -98,12 +124,7 @@ class SCIImplementation(SmartContractsInterface):
                     del self._awaiting_callbacks[tx_hash]
                 else:
                     cb_copy = cb
-                    event = BatchTransferEvent(
-                        tx_hash=tx_hash,
-                        sender='0x' + change['topics'][1][26:],
-                        amount=int(change['data'][2:66], 16),
-                        closure_time=int(change['data'][66:130], 16),
-                    )
+                    event = self._raw_log_to_batch_event(change)
                     logger.info('Detected incoming batch transfer {}, '
                                 'waiting for confirmations'.format(event))
 

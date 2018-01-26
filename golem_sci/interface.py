@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List
 import abc
 
 from ethereum.utils import denoms
@@ -50,6 +50,15 @@ class SmartContractsInterface(object, metaclass=abc.ABCMeta):
         """
         Returns GNTW balance in wei or None is case of issues.
         """
+        pass
+
+    @abc.abstractmethod
+    def get_incoming_batch_tranfers(
+            self,
+            payer_address: str,
+            payee_address: str,
+            from_block: int,
+            to_block: int) -> List[BatchTransferEvent]:
         pass
 
     @abc.abstractmethod
