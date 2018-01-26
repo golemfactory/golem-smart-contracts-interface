@@ -127,3 +127,40 @@ class SCIImplementation(SmartContractsInterface):
 
             for key in to_remove:
                 del self._awaiting_callbacks[key]
+
+    ############################
+    # Concent specific methods #
+    ############################
+
+    def force_subtask_payment(
+            self,
+            requestor_address: str,
+            provider_address: str,
+            value: int,
+            subtask_id: str) -> str:
+        raise Exception("Not implemented yet")
+
+    def force_batch_payment(
+            self,
+            requestor_address: str,
+            provider_address: str,
+            value: int,
+            closure_time: int) -> str:
+        raise Exception("Not implemented yet")
+
+    def cover_additional_verification_cost(
+            self,
+            client_address: str,
+            value: int,
+            subtask_id: str) -> str:
+        raise Exception("Not implemented yet")
+
+    def get_deposit_value(
+            self,
+            account_address: str) -> Optional[int]:
+        raise Exception("Not implemented yet")
+
+    def get_deposit_locked_until(
+            self,
+            account_address: str) -> Optional[int]:
+        raise Exception("Not implemented yet")

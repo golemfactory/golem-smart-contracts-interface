@@ -28,6 +28,7 @@ class BatchTransferEvent:
 class SmartContractsInterface(object, metaclass=abc.ABCMeta):
     """
     All addresses are in the form of 0x[0-9a-zA-Z]
+    ETH and GNT values are in wei, i.e. 10^18 wei = 1 ETH/GNT
     """
 
     @abc.abstractmethod
@@ -61,5 +62,63 @@ class SmartContractsInterface(object, metaclass=abc.ABCMeta):
         Every time a BatchTransfer event happens callback will be called
         if the recipient equals to the input address and the block has been
         confirmed required number of times.
+        """
+        pass
+
+    ############################
+    # Concent specific methods #
+    ############################
+
+    @abc.abstractmethod
+    def force_subtask_payment(
+            self,
+            requestor_address: str,
+            provider_address: str,
+            value: int,
+            subtask_id: str) -> str:
+        """
+        Returns transaction hash.
+        """
+        pass
+
+    @abc.abstractmethod
+    def force_batch_payment(
+            self,
+            requestor_address: str,
+            provider_address: str,
+            value: int,
+            closure_time: int) -> str:
+        """
+        Returns transaction hash.
+        """
+        pass
+
+    @abc.abstractmethod
+    def cover_additional_verification_cost(
+            self,
+            client_address: str,
+            value: int,
+            subtask_id: str) -> str:
+        """
+        Returns transaction hash.
+        """
+        pass
+
+    @abc.abstractmethod
+    def get_deposit_value(
+            self,
+            account_address: str) -> Optional[int]:
+        """
+        Returns deposit value or None.
+        """
+        pass
+
+    @abc.abstractmethod
+    def get_deposit_locked_until(
+            self,
+            account_address: str) -> Optional[int]:
+        """
+        Returns deposit locked_until value which is a Unix epoch timestamp in
+        seconds. or None in case of issues.
         """
         pass
