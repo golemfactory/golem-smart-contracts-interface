@@ -1,14 +1,12 @@
 from typing import Any, Dict, List, Optional
 from ethereum.transactions import Transaction
-from .client import Client
 from .interface import SmartContractsInterface
-from .token import GNTWToken
 
 
 class SCIImplementation(SmartContractsInterface):
-    def __init__(self, web3):
-        self._geth_client = Client(web3)
-        self._token = GNTWToken(self._geth_client)
+    def __init__(self, geth_client, token):
+        self._geth_client = geth_client
+        self._token = token
         self.GAS_PRICE = self._token.GAS_PRICE
         self.GAS_PER_PAYMENT = self._token.GAS_PER_PAYMENT
         self.GAS_BATCH_PAYMENT_BASE = self._token.GAS_BATCH_PAYMENT_BASE
