@@ -35,7 +35,7 @@ class SCIImplementationTest(unittest.TestCase):
             'removed': False,
             'transactionHash': tx_hash,
             'blockNumber': block_number,
-            'topics': ['', sender_address],
+            'topics': ['', '0x' + '0' * 24 + sender_address[2:]],
             'data': data,
         }]
         self.geth_client.get_block_number.return_value = block_number

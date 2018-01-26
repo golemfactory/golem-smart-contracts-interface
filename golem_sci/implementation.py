@@ -80,7 +80,11 @@ class SCIImplementation(SmartContractsInterface):
 
     def _monitor_blockchain(self):
         while True:
-            self._pull_changes_from_blockchain()
+            try:
+                self.wait_until_synchronized()
+                self._pull_changes_from_blockchain()
+            except Exception as e:
+                logger.error(e)
             time.sleep(15)
 
     def _pull_changes_from_blockchain(self) -> None:
@@ -96,7 +100,7 @@ class SCIImplementation(SmartContractsInterface):
                     cb_copy = cb
                     event = BatchTransferEvent(
                         tx_hash=tx_hash,
-                        sender=change['topics'][1],
+                        sender='0x' + change['topics'][1][26:],
                         amount=int(change['data'][2:66], 16),
                         closure_time=int(change['data'][66:130], 16),
                     )
