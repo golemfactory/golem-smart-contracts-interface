@@ -150,6 +150,12 @@ class GNTWToken():
             })
         return res
 
+    def get_incoming_batch_transfers_filter(self, address: str) -> int:
+        return self._client.new_filter(
+            address='0xa8CD649dB30b963592D88FdE95fe6284d6224329',
+            topics=[self.TRANSFER_EVENT_ID, None, address],
+        )
+
     def _get_balance(self, token_abi, token_address: bytes, addr: str) -> int:
         data = token_abi.encode_function_call('balanceOf', [decode_hex(addr)])
         r = self._client.call(
