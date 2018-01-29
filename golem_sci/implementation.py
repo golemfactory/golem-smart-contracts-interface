@@ -23,6 +23,7 @@ class SCIImplementation(SmartContractsInterface):
         self._subscriptions = []
 
         self._awaiting_callbacks = {}
+        self._cb_id = 0
 
         if monitor:
             thread = threading.Thread(target=self._monitor_blockchain)
@@ -65,13 +66,19 @@ class SCIImplementation(SmartContractsInterface):
     def subscribe_to_incoming_batch_transfers(
             self,
             address: str,
+            from_block: int,
             cb: callable(BatchTransferEvent),
             required_confs: int) -> None:
         with self._subs_lock:
             filter_id = self._geth_client.new_filter(
                 address=self._token.GNTW_ADDRESS,
                 topics=[self._token.TRANSFER_EVENT_ID, None, address],
+                from_block=from_block,
+                to_block='latest',
             )
+            logs = self._geth_client.get_filter_logs(filter_id)
+            for log in logs:
+                self._on_filter_log(log, cb, required_confs)
             self._subscriptions.append((filter_id, cb, required_confs))
 
     def send_transaction(self, tx: Transaction):
@@ -113,30 +120,39 @@ class SCIImplementation(SmartContractsInterface):
             closure_time=int(raw_log['data'][66:130], 16),
         )
 
+    def _on_filter_log(self, log, cb, required_confs: int) -> None:
+        tx_hash = log['transactionHash']
+        if log['removed']:
+            del self._awaiting_callbacks[tx_hash]
+        else:
+            cb_copy = cb
+            event = self._raw_log_to_batch_event(log)
+            logger.info('Detected incoming batch transfer {}, '
+                        'waiting for confirmations'.format(event))
+
+            self._awaiting_callbacks[tx_hash] = (
+                lambda: cb_copy(event),
+                self._cb_id,
+                log['blockNumber'] + required_confs,
+            )
+            self._cb_id += 1
+
     def _pull_changes_from_blockchain(self) -> None:
         with self._subs_lock:
-            subs = self._subscriptions
+            subs = self._subscriptions.copy()
         for filter_id, cb, required_confs in subs:
-            changes = self._geth_client.get_filter_changes(filter_id)
-            for change in changes:
-                tx_hash = change['transactionHash']
-                if change['removed']:
-                    del self._awaiting_callbacks[tx_hash]
-                else:
-                    cb_copy = cb
-                    event = self._raw_log_to_batch_event(change)
-                    logger.info('Detected incoming batch transfer {}, '
-                                'waiting for confirmations'.format(event))
-
-                    def callback():
-                        cb_copy(event)
-                    self._awaiting_callbacks[tx_hash] = \
-                        (callback, change['blockNumber'] + required_confs)
+            logs = self._geth_client.get_filter_changes(filter_id)
+            for log in logs:
+                self._on_filter_log(log, cb, required_confs)
 
         if self._awaiting_callbacks:
             block_number = self._geth_client.get_block_number()
             to_remove = []
-            for key, (cb, required_block) in self._awaiting_callbacks.items():
+            chronological_callbacks = sorted(
+                self._awaiting_callbacks.items(),
+                key=lambda v: v[1][1],
+            )
+            for key, (cb, _, required_block) in chronological_callbacks:
                 if block_number >= required_block:
                     try:
                         logger.info('Incoming batch transfer confirmed {}'

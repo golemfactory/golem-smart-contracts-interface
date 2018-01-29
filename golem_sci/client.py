@@ -174,16 +174,25 @@ class Client(object):
         }
         return self.web3.eth.filter(obj).filter_id
 
-    def get_filter_changes(self, filer_id):
+    def get_filter_changes(self, filter_id):
         """
         Polling method for a filter,
         which returns an array of logs which occurred since last poll
-        :param filer_id: the filter id
+        :param filter_id: the filter id
         :return:
         Returns all new entries which occurred since the
         last call to this method for the given filter_id
         """
-        return self.web3.eth.getFilterChanges(Client.__add_padding(filer_id))
+        return self.web3.eth.getFilterChanges(Client.__add_padding(filter_id))
+
+    def get_filter_logs(self, filter_id):
+        """
+        Polling method for a filter which returns an array of all matching logs
+        :param filter_id: the filter id
+        :return:
+        Returns all entries which match the filter
+        """
+        return self.web3.eth.getFilterLogs(Client.__add_padding(filter_id))
 
     def get_logs(self,
                  from_block=None,
@@ -213,7 +222,7 @@ class Client(object):
         for i in range(len(topics)):
             topics[i] = Client.__add_padding(topics[i])
         filter_id = self.new_filter(from_block, to_block, address, topics)
-        return self.web3.eth.getFilterLogs(filter_id)
+        return self.get_filter_logs(filter_id)
 
     def wait_until_synchronized(self) -> bool:
         is_synchronized = False

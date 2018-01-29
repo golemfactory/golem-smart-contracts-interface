@@ -17,12 +17,13 @@ class BatchTransferEvent:
         self.closure_time = closure_time
 
     def __str__(self) -> str:
-        return 'tx: {} sender: {} amount: {} closure_time: {}'.format(
-            self.tx_hash,
-            self.sender,
-            self.amount / denoms.ether,
-            self.closure_time,
-        )
+        return '<BatchTransferEvent tx: {} sender: {} amount: {} '\
+            'closure_time: {}>'.format(
+                self.tx_hash,
+                self.sender,
+                self.amount / denoms.ether,
+                self.closure_time,
+            )
 
 
 class SmartContractsInterface(object, metaclass=abc.ABCMeta):
@@ -65,6 +66,7 @@ class SmartContractsInterface(object, metaclass=abc.ABCMeta):
     def subscribe_to_incoming_batch_transfers(
             self,
             address: str,
+            from_block: int,
             cb: callable(BatchTransferEvent),
             required_confs: int) -> None:
         """
