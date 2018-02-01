@@ -1,7 +1,7 @@
 import logging
 import threading
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from ethereum.transactions import Transaction
 
@@ -11,9 +11,16 @@ logger = logging.getLogger("golem_sci.implementation")
 
 
 class SCIImplementation(SmartContractsInterface):
-    def __init__(self, geth_client, token, monitor=True):
+    def __init__(self, geth_client, token, address, tx_sign=None, monitor=True):
+        """
+        Performs all blockchain operations using the address as the caller.
+        Uses tx_sign to sign outgoing transaction, tx_sign can be None in which
+        case one may only perform read only operations.
+        """
         self._geth_client = geth_client
         self._token = token
+        self._address = address
+        self._tx_sign = tx_sign
 
         self.GAS_PRICE = self._token.GAS_PRICE
         self.GAS_PER_PAYMENT = self._token.GAS_PER_PAYMENT
@@ -42,6 +49,9 @@ class SCIImplementation(SmartContractsInterface):
     def get_gntw_balance(self, address: str) -> Optional[int]:
         return self._token.get_gntw_balance(address)
 
+    def batch_transfer(self, payments, closure_time: int) -> str:
+        raise Exception("Not implemented yet")
+
     def prepare_batch_transfer(self,
                                privkey: bytes,
                                payments,
@@ -67,7 +77,7 @@ class SCIImplementation(SmartContractsInterface):
             self,
             address: str,
             from_block: int,
-            cb: callable(BatchTransferEvent),
+            cb: Callable[[BatchTransferEvent], None],
             required_confs: int) -> None:
         with self._subs_lock:
             filter_id = self._geth_client.new_filter(

@@ -1,4 +1,4 @@
-from typing import Optional, List
+from typing import Callable, Optional, List
 import abc
 
 from ethereum.utils import denoms
@@ -30,6 +30,7 @@ class SmartContractsInterface(object, metaclass=abc.ABCMeta):
     """
     All addresses are in the form of 0x[0-9a-zA-Z]
     ETH and GNT values are in wei, i.e. 10^18 wei = 1 ETH/GNT
+    All transaction methods return transaction hash
     """
 
     @abc.abstractmethod
@@ -67,7 +68,7 @@ class SmartContractsInterface(object, metaclass=abc.ABCMeta):
             self,
             address: str,
             from_block: int,
-            cb: callable(BatchTransferEvent),
+            cb: Callable[[BatchTransferEvent], None],
             required_confs: int) -> None:
         """
         Every time a BatchTransfer event happens callback will be called
@@ -76,44 +77,17 @@ class SmartContractsInterface(object, metaclass=abc.ABCMeta):
         """
         pass
 
+    ################
+    # Transactions #
+    ################
+
+    @abc.abstractmethod
+    def batch_transfer(self, payments, closure_time: int) -> str:
+        pass
+
     ############################
     # Concent specific methods #
     ############################
-
-    @abc.abstractmethod
-    def force_subtask_payment(
-            self,
-            requestor_address: str,
-            provider_address: str,
-            value: int,
-            subtask_id: str) -> str:
-        """
-        Returns transaction hash.
-        """
-        pass
-
-    @abc.abstractmethod
-    def force_batch_payment(
-            self,
-            requestor_address: str,
-            provider_address: str,
-            value: int,
-            closure_time: int) -> str:
-        """
-        Returns transaction hash.
-        """
-        pass
-
-    @abc.abstractmethod
-    def cover_additional_verification_cost(
-            self,
-            client_address: str,
-            value: int,
-            subtask_id: str) -> str:
-        """
-        Returns transaction hash.
-        """
-        pass
 
     @abc.abstractmethod
     def get_deposit_value(
@@ -132,4 +106,34 @@ class SmartContractsInterface(object, metaclass=abc.ABCMeta):
         Returns deposit locked_until value which is a Unix epoch timestamp in
         seconds. or None in case of issues.
         """
+        pass
+
+    ########################
+    # Concent transactions #
+    ########################
+
+    @abc.abstractmethod
+    def force_subtask_payment(
+            self,
+            requestor_address: str,
+            provider_address: str,
+            value: int,
+            subtask_id: str) -> str:
+        pass
+
+    @abc.abstractmethod
+    def force_batch_payment(
+            self,
+            requestor_address: str,
+            provider_address: str,
+            value: int,
+            closure_time: int) -> str:
+        pass
+
+    @abc.abstractmethod
+    def cover_additional_verification_cost(
+            self,
+            client_address: str,
+            value: int,
+            subtask_id: str) -> str:
         pass
