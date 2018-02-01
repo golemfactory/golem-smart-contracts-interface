@@ -77,12 +77,38 @@ class SmartContractsInterface(object, metaclass=abc.ABCMeta):
         """
         pass
 
-    ################
-    # Transactions #
-    ################
-
+    # Transaction
     @abc.abstractmethod
     def batch_transfer(self, payments, closure_time: int) -> str:
+        pass
+
+    ########################
+    # GNT-GNTW conversions #
+    ########################
+
+    # Transaction
+    @abc.abstractmethod
+    def create_personal_deposit_slot(self) -> str:
+        pass
+
+    @abc.abstractmethod
+    def get_personal_deposit_slot(self) -> str:
+        """
+        Returns Ethereum address
+        """
+        pass
+
+    # Transaction
+    @abc.abstractmethod
+    def process_personal_deposit_slot(self) -> str:
+        """
+        Final step which convert the value of the deposit to GNTW
+        """
+        pass
+
+    # Transaction
+    @abc.abstractmethod
+    def convert_gntw_to_gnt(self, amount: int) -> str:
         pass
 
     ############################
@@ -108,10 +134,7 @@ class SmartContractsInterface(object, metaclass=abc.ABCMeta):
         """
         pass
 
-    ########################
-    # Concent transactions #
-    ########################
-
+    # Transaction
     @abc.abstractmethod
     def force_subtask_payment(
             self,
@@ -121,6 +144,7 @@ class SmartContractsInterface(object, metaclass=abc.ABCMeta):
             subtask_id: str) -> str:
         pass
 
+    # Transaction
     @abc.abstractmethod
     def force_batch_payment(
             self,
@@ -130,6 +154,7 @@ class SmartContractsInterface(object, metaclass=abc.ABCMeta):
             closure_time: int) -> str:
         pass
 
+    # Transaction
     @abc.abstractmethod
     def cover_additional_verification_cost(
             self,

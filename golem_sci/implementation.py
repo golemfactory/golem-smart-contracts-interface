@@ -172,6 +172,28 @@ class SCIImplementation(SmartContractsInterface):
             for key in to_remove:
                 del self._awaiting_callbacks[key]
 
+    ########################
+    # GNT-GNTW conversions #
+    ########################
+
+    def create_personal_deposit_slot(self) -> str:
+        raise Exception("Not implemented yet")
+
+    def get_personal_deposit_slot(self) -> str:
+        """
+        Returns Ethereum address
+        """
+        raise Exception("Not implemented yet")
+
+    def process_personal_deposit_slot(self) -> str:
+        """
+        Final step which convert the value of the deposit to GNTW
+        """
+        raise Exception("Not implemented yet")
+
+    def convert_gntw_to_gnt(self, amount: int) -> str:
+        raise Exception("Not implemented yet")
+
     ############################
     # Concent specific methods #
     ############################
