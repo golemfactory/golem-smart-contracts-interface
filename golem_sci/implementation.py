@@ -94,6 +94,12 @@ class SCIImplementation(SmartContractsInterface):
                 self._on_filter_log(log, cb, required_confs)
             self._subscriptions.append((filter_id, cb, required_confs))
 
+    def transfer_gnt(self, to_address: str, amount: int) -> str:
+        raise Exception('Not implemented yet')
+
+    def transfer_gntw(self, to_address: str, amount: int) -> str:
+        raise Exception('Not implemented yet')
+
     def send_transaction(self, tx: Transaction):
         return self._geth_client.send(tx)
 

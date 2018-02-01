@@ -86,6 +86,16 @@ class SmartContractsInterface(object, metaclass=abc.ABCMeta):
 
     # Transaction
     @abc.abstractmethod
+    def transfer_gnt(self, to_address: str, amount: int) -> str:
+        pass
+
+    # Transaction
+    @abc.abstractmethod
+    def transfer_gntw(self, to_address: str, amount: int) -> str:
+        pass
+
+    # Transaction
+    @abc.abstractmethod
     def batch_transfer(self, payments, closure_time: int) -> str:
         pass
 
