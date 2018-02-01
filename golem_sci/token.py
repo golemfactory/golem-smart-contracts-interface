@@ -130,26 +130,6 @@ class GNTWToken():
         gas = self.GAS_BATCH_PAYMENT_BASE + len(p) * self.GAS_PER_PAYMENT
         return self._create_transaction(addr, self.GNTW_ADDRESS, data, gas)
 
-    def get_incomes_from_block(self, block: int, address: str) -> List[Any]:
-        logs = self._client.get_logs(block,
-                                     block,
-                                     encode_hex(self.GNTW_ADDRESS),
-                                     [self.TRANSFER_EVENT_ID, None, address])
-        if not logs:
-            return logs
-
-        res = []
-        for entry in logs:
-            if entry['topics'][2] != address:
-                raise Exception("Unexpected income event from {}"
-                                .format(entry['topics'][2]))
-
-            res.append({
-                'sender': entry['topics'][1],
-                'value': int(entry['data'][:66], 16),
-            })
-        return res
-
     def _get_balance(self, token_abi, token_address: str, addr: str) -> int:
         data = token_abi.encode_function_call('balanceOf', [decode_hex(addr)])
         r = self._client.call(

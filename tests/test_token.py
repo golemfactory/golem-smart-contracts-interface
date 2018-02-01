@@ -183,33 +183,6 @@ class GNTWTokenTest(unittest.TestCase):
         self.assertTrue(self.transfer_called)
         self.assertTrue(self.process_deposit_called)
 
-    def test_get_incomes_from_block(self):
-        block_number = 1
-        receiver_address = '0xbadcode'
-        some_address = '0xdeadbeef'
-
-        self.client.get_logs.return_value = None
-        incomes = self.token.get_incomes_from_block(block_number,
-                                                    receiver_address)
-        self.assertEqual(None, incomes)
-
-        topics = [self.token.TRANSFER_EVENT_ID, None, receiver_address]
-        self.client.get_logs.assert_called_with(
-            block_number,
-            block_number,
-            encode_hex(self.token.GNTW_ADDRESS),
-            topics)
-
-        self.client.get_logs.return_value = [{
-            'topics': ['0x0', some_address, receiver_address],
-            'data': '0xf',
-        }]
-        incomes = self.token.get_incomes_from_block(block_number,
-                                                    receiver_address)
-        self.assertEqual(1, len(incomes))
-        self.assertEqual(some_address, incomes[0]['sender'])
-        self.assertEqual(15, incomes[0]['value'])
-
     def test_payment_aggregation(self):
         a1 = urandom(20)
         a2 = urandom(20)

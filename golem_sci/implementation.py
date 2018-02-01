@@ -100,9 +100,6 @@ class SCIImplementation(SmartContractsInterface):
     def get_transaction_receipt(self, tx_hash: str) -> Optional[Dict[str, Any]]:
         return self._geth_client.get_transaction_receipt(tx_hash)
 
-    def get_incomes_from_block(self, block: int, address: str) -> List[Any]:
-        return self._token.get_incomes_from_block(block, address)
-
     def request_gnt_from_faucet(self, privkey: bytes) -> None:
         self._token.request_from_faucet(privkey)
 
