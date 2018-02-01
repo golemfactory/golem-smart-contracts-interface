@@ -4,13 +4,24 @@ import unittest
 from golem_sci.implementation import SCIImplementation
 
 
+def get_eth_address():
+    return '0xadd355' + '0' * 34
+
+
 class SCIImplementationTest(unittest.TestCase):
     def setUp(self):
         self.geth_client = mock.Mock()
         self.token = mock.Mock()
         self.token.GNTW_ADDRESS = '0x' + '1' * 40
         self.token.TRANSFER_EVENT_ID = '0x' + '2' * 64
-        self.sci = SCIImplementation(self.geth_client, self.token, False)
+        self.sci = SCIImplementation(
+            self.geth_client,
+            self.token,
+            get_eth_address(),
+            monitor=False)
+
+    def test_eth_address(self):
+        assert get_eth_address() == self.sci.get_eth_address()
 
     def test_subscribe_to_incoming_batch_transfers(self):
         receiver_address = '0x' + 'f' * 40

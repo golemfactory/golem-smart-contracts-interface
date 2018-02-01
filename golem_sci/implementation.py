@@ -37,6 +37,9 @@ class SCIImplementation(SmartContractsInterface):
             thread.daemon = True
             thread.start()
 
+    def get_eth_address(self) -> str:
+        return self._address
+
     def get_eth_balance(self, address: str) -> Optional[int]:
         """
         Returns None is case of issues coming from the geth client

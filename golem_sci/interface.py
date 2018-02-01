@@ -34,6 +34,13 @@ class SmartContractsInterface(object, metaclass=abc.ABCMeta):
     """
 
     @abc.abstractmethod
+    def get_eth_address(self) -> str:
+        """
+        Return associated with this instance Ethereum address
+        """
+        pass
+
+    @abc.abstractmethod
     def get_eth_balance(self, address: str) -> Optional[int]:
         """
         Returns eth balance in wei or None is case of issues.
