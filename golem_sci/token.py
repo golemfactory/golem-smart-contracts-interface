@@ -45,14 +45,6 @@ class GNTWToken():
     # tx: 21000, balance substract: 5000, arithmetics < 800
     GAS_BATCH_PAYMENT_BASE = 21000 + 800 + 5000
 
-    """
-    When batchTransfer function is in a different contract than the main token.
-    GNTW implementation specifically.
-    """
-    GNTW_ADDRESS = '0xa8CD649dB30b963592D88FdE95fe6284d6224329'
-    TESTGNT_ADDRESS = '0x2928aA793B79FCdb7b5B94f5d8419e0EE20AbDaF'
-    FAUCET_ADDRESS = '0x36FeE1616A131E7382922475A1BA67F88F891f0d'
-
     # keccak256(BatchTransfer(address,address,uint256,uint64))
     TRANSFER_EVENT_ID = '0x24310ec9df46c171fe9c6d6fe25cac6781e7fa8f153f8f72ce63037a4b38c4b6'  # noqa
 
@@ -67,6 +59,9 @@ class GNTWToken():
         self._gnt = abi.ContractTranslator(
             json.loads(contracts.GolemNetworkToken.ABI))
         self._faucet = abi.ContractTranslator(json.loads(contracts.Faucet.ABI))
+        self.GNTW_ADDRESS = contracts.GolemNetworkTokenWrapped.ADDRESS
+        self.TESTGNT_ADDRESS = contracts.GolemNetworkToken.ADDRESS
+        self.FAUCET_ADDRESS = contracts.Faucet.ADDRESS
         self._deposit_address = None
         self._deposit_address_created = False
         self._process_deposit_tx = None
