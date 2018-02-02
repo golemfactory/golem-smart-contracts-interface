@@ -3,28 +3,116 @@ import threading
 import time
 from typing import Any, Callable, Dict, List, Optional
 
+from ethereum import abi
+from ethereum.utils import zpad, int_to_big_endian
 from ethereum.transactions import Transaction
+from eth_utils import decode_hex
 
+from golem_sci import contracts
 from .interface import SmartContractsInterface, BatchTransferEvent
 
 logger = logging.getLogger("golem_sci.implementation")
 
 
+def encode_payments(payments):
+    paymap = {}
+    for p in payments:
+        if p.payee in paymap:
+            paymap[p.payee] += p.value
+        else:
+            paymap[p.payee] = p.value
+
+    args = []
+    value = 0
+    for to, v in paymap.items():
+        max_value = 2 ** 96
+        if v >= max_value:
+            raise ValueError("v should be less than {}".format(max_value))
+        value += v
+        v = zpad(int_to_big_endian(v), 12)
+        pair = v + to
+        if len(pair) != 32:
+            raise ValueError(
+                "Incorrect pair length: {}. Should be 32".format(len(pair)))
+        args.append(pair)
+    return args
+
+
+class ContractWrapper:
+    def __init__(self, actor_address, contract):
+        self._actor_address = actor_address
+        self._contract = contract
+        self._translator = abi.ContractTranslator(contract.abi)
+        self.address = contract.address
+
+    def call(self):
+        return self._contract.call({'from': self._actor_address})
+
+    def create_transaction(
+            self,
+            function_name,
+            args,
+            nonce,
+            gas_price,
+            gas_limit) -> Transaction:
+        data = self._translator.encode_function_call(function_name, args)
+        return Transaction(
+            nonce=nonce,
+            gasprice=gas_price,
+            startgas=gas_limit,
+            to=decode_hex(self._contract.address),
+            value=0,
+            data=data,
+        )
+
+
 class SCIImplementation(SmartContractsInterface):
-    def __init__(self, geth_client, token, address, tx_sign=None, monitor=True):
+    # Gas price: 20 gwei, Homestead suggested gas price.
+    GAS_PRICE = 20 * 10 ** 9
+
+    GAS_TRANSFER = 90000
+    GAS_CREATE_PERSONAL_DEPOSIT = 320000
+    GAS_PROCESS_DEPOSIT = 110000
+    # Total gas for a batchTransfer is BASE + len(payments) * PER_PAYMENT
+    GAS_PER_PAYMENT = 30000
+    # tx: 21000, balance substract: 5000, arithmetics < 800
+    GAS_BATCH_PAYMENT_BASE = 21000 + 800 + 5000
+    GAS_FAUCET = 90000
+
+    # keccak256(BatchTransfer(address,address,uint256,uint64))
+    TRANSFER_EVENT_ID = '0x24310ec9df46c171fe9c6d6fe25cac6781e7fa8f153f8f72ce63037a4b38c4b6'  # noqa
+
+    def __init__(self, geth_client, address, tx_sign=None, monitor=True):
         """
         Performs all blockchain operations using the address as the caller.
         Uses tx_sign to sign outgoing transaction, tx_sign can be None in which
         case one may only perform read only operations.
         """
         self._geth_client = geth_client
-        self._token = token
         self._address = address
         self._tx_sign = tx_sign
 
-        self.GAS_PRICE = self._token.GAS_PRICE
-        self.GAS_PER_PAYMENT = self._token.GAS_PER_PAYMENT
-        self.GAS_BATCH_PAYMENT_BASE = self._token.GAS_BATCH_PAYMENT_BASE
+        self._gntw = ContractWrapper(
+            address,
+            self._geth_client.contract(
+                contracts.GolemNetworkTokenWrapped.ADDRESS,
+                contracts.GolemNetworkTokenWrapped.ABI,
+            ),
+        )
+        self._gnt = ContractWrapper(
+            address,
+            self._geth_client.contract(
+                contracts.GolemNetworkToken.ADDRESS,
+                contracts.GolemNetworkToken.ABI,
+            ),
+        )
+        self._faucet = ContractWrapper(
+            address,
+            self._geth_client.contract(
+                contracts.Faucet.ADDRESS,
+                contracts.Faucet.ABI,
+            ),
+        )
 
         self._subs_lock = threading.Lock()
         self._subscriptions = []
@@ -47,19 +135,20 @@ class SCIImplementation(SmartContractsInterface):
         return self._geth_client.get_balance(address)
 
     def get_gnt_balance(self, address: str) -> Optional[int]:
-        return self._token.get_gnt_balance(address)
+        return self._gnt.call().balanceOf(decode_hex(address))
 
     def get_gntw_balance(self, address: str) -> Optional[int]:
-        return self._token.get_gntw_balance(address)
+        return self._gntw.call().balanceOf(decode_hex(address))
 
     def batch_transfer(self, payments, closure_time: int) -> str:
-        raise Exception("Not implemented yet")
-
-    def prepare_batch_transfer(self,
-                               privkey: bytes,
-                               payments,
-                               closure_time: int) -> Transaction:
-        return self._token.batch_transfer(privkey, payments, closure_time)
+        p = encode_payments(payments)
+        gas = self.GAS_BATCH_PAYMENT_BASE + len(p) * self.GAS_PER_PAYMENT
+        return self._send_transaction(
+            self._gntw,
+            'batchTransfer',
+            [p, closure_time],
+            gas,
+        )
 
     def get_incoming_batch_tranfers(
             self,
@@ -70,8 +159,8 @@ class SCIImplementation(SmartContractsInterface):
         logs = self._geth_client.get_logs(
             from_block=from_block,
             to_block=to_block,
-            address=self._token.GNTW_ADDRESS,
-            topics=[self._token.TRANSFER_EVENT_ID, payer_address, payee_address]
+            address=self._gntw.address,
+            topics=[self.TRANSFER_EVENT_ID, payer_address, payee_address]
         )
 
         return [self._raw_log_to_batch_event(raw_log) for raw_log in logs]
@@ -84,8 +173,8 @@ class SCIImplementation(SmartContractsInterface):
             required_confs: int) -> None:
         with self._subs_lock:
             filter_id = self._geth_client.new_filter(
-                address=self._token.GNTW_ADDRESS,
-                topics=[self._token.TRANSFER_EVENT_ID, None, address],
+                address=self._gntw.address,
+                topics=[self.TRANSFER_EVENT_ID, None, address],
                 from_block=from_block,
                 to_block='latest',
             )
@@ -95,10 +184,20 @@ class SCIImplementation(SmartContractsInterface):
             self._subscriptions.append((filter_id, cb, required_confs))
 
     def transfer_gnt(self, to_address: str, amount: int) -> str:
-        raise Exception('Not implemented yet')
+        return self._send_transaction(
+            self._gnt,
+            'transfer',
+            [decode_hex(to_address), amount],
+            self.GAS_TRANSFER,
+        )
 
     def transfer_gntw(self, to_address: str, amount: int) -> str:
-        raise Exception('Not implemented yet')
+        return self._send_transaction(
+            self._gntw,
+            'transfer',
+            [decode_hex(to_address), amount],
+            self.GAS_TRANSFER,
+        )
 
     def send_transaction(self, tx: Transaction):
         return self._geth_client.send(tx)
@@ -109,14 +208,35 @@ class SCIImplementation(SmartContractsInterface):
     def get_transaction_receipt(self, tx_hash: str) -> Optional[Dict[str, Any]]:
         return self._geth_client.get_transaction_receipt(tx_hash)
 
-    def request_gnt_from_faucet(self, privkey: bytes) -> None:
-        self._token.request_from_faucet(privkey)
+    def request_gnt_from_faucet(self) -> str:
+        return self._send_transaction(
+            self._faucet,
+            'create',
+            [],
+            self.GAS_FAUCET,
+        )
 
     def wait_until_synchronized(self) -> bool:
         return self._geth_client.wait_until_synchronized()
 
     def is_synchronized(self) -> bool:
         return self._geth_client.is_synchronized()
+
+    def _send_transaction(
+            self,
+            contract,
+            function_name,
+            args,
+            gas_limit):
+        tx = contract.create_transaction(
+            function_name,
+            args,
+            self._geth_client.get_transaction_count(self.get_eth_address()),
+            self.GAS_PRICE,
+            gas_limit,
+        )
+        self._tx_sign(tx)
+        return self._geth_client.send(tx)
 
     def _monitor_blockchain(self):
         while True:
@@ -186,19 +306,24 @@ class SCIImplementation(SmartContractsInterface):
     ########################
 
     def create_personal_deposit_slot(self) -> str:
-        raise Exception("Not implemented yet")
+        return self._send_transaction(
+            self._gntw,
+            'createPersonalDepositAddress',
+            [],
+            self.GAS_CREATE_PERSONAL_DEPOSIT,
+        )
 
     def get_personal_deposit_slot(self) -> str:
-        """
-        Returns Ethereum address
-        """
-        raise Exception("Not implemented yet")
+        return self._gntw.call()\
+            .getPersonalDepositAddress(decode_hex(self._address))
 
     def process_personal_deposit_slot(self) -> str:
-        """
-        Final step which convert the value of the deposit to GNTW
-        """
-        raise Exception("Not implemented yet")
+        return self._send_transaction(
+            self._gntw,
+            'processDeposit',
+            [],
+            self.GAS_PROCESS_DEPOSIT,
+        )
 
     def convert_gntw_to_gnt(self, amount: int) -> str:
         raise Exception("Not implemented yet")

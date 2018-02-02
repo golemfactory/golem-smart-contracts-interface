@@ -1,7 +1,9 @@
+import json
 import unittest.mock as mock
 import unittest
 
 from golem_sci.implementation import SCIImplementation
+from golem_sci.contracts import GolemNetworkTokenWrapped
 
 
 def get_eth_address():
@@ -11,12 +13,15 @@ def get_eth_address():
 class SCIImplementationTest(unittest.TestCase):
     def setUp(self):
         self.geth_client = mock.Mock()
-        self.token = mock.Mock()
-        self.token.GNTW_ADDRESS = '0x' + '1' * 40
-        self.token.TRANSFER_EVENT_ID = '0x' + '2' * 64
+
+        def client_contract(addr, abi):
+            ret = mock.Mock()
+            ret.abi = json.loads(abi)
+            ret.address = addr
+            return ret
+        self.geth_client.contract.side_effect = client_contract
         self.sci = SCIImplementation(
             self.geth_client,
-            self.token,
             get_eth_address(),
             monitor=False)
 
@@ -44,8 +49,8 @@ class SCIImplementationTest(unittest.TestCase):
         )
 
         self.geth_client.new_filter.assert_called_once_with(
-            address=self.token.GNTW_ADDRESS,
-            topics=[self.token.TRANSFER_EVENT_ID, None, receiver_address],
+            address=GolemNetworkTokenWrapped.ADDRESS,
+            topics=[self.sci.TRANSFER_EVENT_ID, None, receiver_address],
             from_block=from_block,
             to_block='latest',
         )
@@ -101,8 +106,8 @@ class SCIImplementationTest(unittest.TestCase):
             to_block,
         )
         self.geth_client.get_logs.assert_called_once_with(
-            address=self.token.GNTW_ADDRESS,
-            topics=[self.token.TRANSFER_EVENT_ID, sender_address, receiver_address],  # noqa
+            address=GolemNetworkTokenWrapped.ADDRESS,
+            topics=[self.sci.TRANSFER_EVENT_ID, sender_address, receiver_address],  # noqa
             from_block=from_block,
             to_block=to_block,
         )

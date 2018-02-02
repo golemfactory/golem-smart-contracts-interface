@@ -1,3 +1,4 @@
+import json
 import logging
 import pytz
 import rlp
@@ -68,8 +69,7 @@ class Client(object):
         :param address: account address
         :return: number of transactions
         """
-        return self.web3.eth.getTransactionCount(Client.__add_padding(address),
-                                                 'pending')
+        return self.web3.eth.getTransactionCount(address, 'pending')
 
     def send(self, transaction):
         """
@@ -183,7 +183,7 @@ class Client(object):
         Returns all new entries which occurred since the
         last call to this method for the given filter_id
         """
-        return self.web3.eth.getFilterChanges(Client.__add_padding(filter_id))
+        return self.web3.eth.getFilterChanges(filter_id)
 
     def get_filter_logs(self, filter_id):
         """
@@ -192,7 +192,7 @@ class Client(object):
         :return:
         Returns all entries which match the filter
         """
-        return self.web3.eth.getFilterLogs(Client.__add_padding(filter_id))
+        return self.web3.eth.getFilterLogs(filter_id)
 
     def get_logs(self,
                  from_block=None,
@@ -223,6 +223,9 @@ class Client(object):
             topics[i] = Client.__add_padding(topics[i])
         filter_id = self.new_filter(from_block, to_block, address, topics)
         return self.get_filter_logs(filter_id)
+
+    def contract(self, address, abi):
+        return self.web3.eth.contract(address=address, abi=json.loads(abi))
 
     def wait_until_synchronized(self) -> bool:
         is_synchronized = False
@@ -295,6 +298,9 @@ class Client(object):
         if address is None:
             return address
         elif isinstance(address, str):
+            if address.startswith('0x'):
+                address = address[2:]
+            address = '0x' + '0' * (64 - len(address)) + address
             address = address.encode()
         if isinstance(address, bytes):
             if address.startswith(b'0x'):
