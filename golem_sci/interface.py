@@ -1,29 +1,12 @@
 from typing import Callable, Optional, List
 import abc
 
-from ethereum.utils import denoms
-
-
-class BatchTransferEvent:
-    def __init__(
-            self,
-            tx_hash: str,
-            sender: str,
-            amount: int,
-            closure_time: int):
-        self.tx_hash = tx_hash
-        self.sender = sender
-        self.amount = amount
-        self.closure_time = closure_time
-
-    def __str__(self) -> str:
-        return '<BatchTransferEvent tx: {} sender: {} amount: {} '\
-            'closure_time: {}>'.format(
-                self.tx_hash,
-                self.sender,
-                self.amount / denoms.ether,
-                self.closure_time,
-            )
+from .events import (
+    BatchTransferEvent,
+    ForcedPaymentEvent,
+    ForcedSubtaskPaymentEvent,
+    CoverAdditionalVerificationEvent,
+)
 
 
 class SmartContractsInterface(object, metaclass=abc.ABCMeta):
@@ -161,14 +144,32 @@ class SmartContractsInterface(object, metaclass=abc.ABCMeta):
             subtask_id: str) -> str:
         pass
 
+    @abc.abstractmethod
+    def get_forced_subtask_payments(
+            self,
+            requestor_address: str,
+            provider_address: str,
+            from_block: int,
+            to_block: int) -> List[ForcedSubtaskPaymentEvent]:
+        pass
+
     # Transaction
     @abc.abstractmethod
-    def force_batch_payment(
+    def force_payment(
             self,
             requestor_address: str,
             provider_address: str,
             value: int,
             closure_time: int) -> str:
+        pass
+
+    @abc.abstractmethod
+    def get_forced_payments(
+            self,
+            requestor_address: str,
+            provider_address: str,
+            from_block: int,
+            to_block: int) -> List[ForcedPaymentEvent]:
         pass
 
     # Transaction
@@ -178,4 +179,12 @@ class SmartContractsInterface(object, metaclass=abc.ABCMeta):
             client_address: str,
             value: int,
             subtask_id: str) -> str:
+        pass
+
+    @abc.abstractmethod
+    def get_covered_additional_verification_costs(
+            self,
+            address: str,
+            from_block: int,
+            to_block: int) -> List[CoverAdditionalVerificationEvent]:
         pass

@@ -9,7 +9,14 @@ from ethereum.transactions import Transaction
 from eth_utils import decode_hex
 
 from golem_sci import contracts
-from .interface import SmartContractsInterface, BatchTransferEvent
+from .interface import SmartContractsInterface
+
+from .events import (
+    BatchTransferEvent,
+    ForcedPaymentEvent,
+    ForcedSubtaskPaymentEvent,
+    CoverAdditionalVerificationEvent,
+)
 
 logger = logging.getLogger("golem_sci.implementation")
 
@@ -260,6 +267,7 @@ class SCIImplementation(SmartContractsInterface):
         return BatchTransferEvent(
             tx_hash=raw_log['transactionHash'],
             sender='0x' + raw_log['topics'][1][26:],
+            receiver='0x' + raw_log['topics'][2][26:],
             amount=int(raw_log['data'][2:66], 16),
             closure_time=int(raw_log['data'][66:130], 16),
         )
@@ -348,7 +356,15 @@ class SCIImplementation(SmartContractsInterface):
             subtask_id: str) -> str:
         raise Exception("Not implemented yet")
 
-    def force_batch_payment(
+    def get_forced_subtask_payments(
+            self,
+            requestor_address: str,
+            provider_address: str,
+            from_block: int,
+            to_block: int) -> List[ForcedSubtaskPaymentEvent]:
+        raise Exception("Not implemented yet")
+
+    def force_payment(
             self,
             requestor_address: str,
             provider_address: str,
@@ -356,11 +372,26 @@ class SCIImplementation(SmartContractsInterface):
             closure_time: int) -> str:
         raise Exception("Not implemented yet")
 
+    def get_forced_payments(
+            self,
+            requestor_address: str,
+            provider_address: str,
+            from_block: int,
+            to_block: int) -> List[ForcedPaymentEvent]:
+        raise Exception("Not implemented yet")
+
     def cover_additional_verification_cost(
             self,
             client_address: str,
             value: int,
             subtask_id: str) -> str:
+        raise Exception("Not implemented yet")
+
+    def get_covered_additional_verification_costs(
+            self,
+            address: str,
+            from_block: int,
+            to_block: int) -> List[CoverAdditionalVerificationEvent]:
         raise Exception("Not implemented yet")
 
     def get_deposit_value(

@@ -69,7 +69,11 @@ class SCIImplementationTest(unittest.TestCase):
                 'removed': False,
                 'transactionHash': tx_hash,
                 'blockNumber': block_number,
-                'topics': ['', '0x' + '0' * 24 + sender_address[2:]],
+                'topics': [
+                    '',
+                    '0x' + '0' * 24 + sender_address[2:],
+                    '0x' + '0' * 24 + receiver_address[2:],
+                ],
                 'data': data,
             } for tx_hash in tx_hashes
         ]
@@ -86,6 +90,7 @@ class SCIImplementationTest(unittest.TestCase):
         for i, tx_hash in enumerate(tx_hashes):
             assert tx_hash == events[i].tx_hash
             assert sender_address == events[i].sender
+            assert receiver_address == events[i].receiver
             assert 166666666666666667 == events[i].amount
             assert 1516959776 == events[i].closure_time
         events = []
@@ -104,7 +109,11 @@ class SCIImplementationTest(unittest.TestCase):
 
         self.geth_client.get_filter_logs.return_value = [{
             'transactionHash': tx_hash,
-            'topics': ['', '0x' + '0' * 24 + sender_address[2:]],
+            'topics': [
+                '',
+                '0x' + '0' * 24 + sender_address[2:],
+                '0x' + '0' * 24 + receiver_address[2:],
+            ],
             'data': data,
         }]
         self.gntw.on.return_value = filter_id
@@ -121,5 +130,6 @@ class SCIImplementationTest(unittest.TestCase):
         assert 1 == len(events)
         assert tx_hash == events[0].tx_hash
         assert sender_address == events[0].sender
+        assert receiver_address == events[0].receiver
         assert 166666666666666667 == events[0].amount
         assert 1516959776 == events[0].closure_time
