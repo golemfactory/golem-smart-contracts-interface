@@ -13,6 +13,7 @@ def get_eth_address():
 class SCIImplementationTest(unittest.TestCase):
     def setUp(self):
         self.geth_client = mock.Mock()
+        self.contracts = {}
 
         def client_contract(addr, abi):
             ret = mock.Mock()
@@ -20,10 +21,17 @@ class SCIImplementationTest(unittest.TestCase):
             ret.address = addr
             return ret
         self.geth_client.contract.side_effect = client_contract
-        self.sci = SCIImplementation(
-            self.geth_client,
-            get_eth_address(),
-            monitor=False)
+        with mock.patch('golem_sci.implementation.ContractWrapper') as contract:
+            def wrapper_factory(actor_address, c):
+                res = mock.Mock()
+                self.contracts[c.address] = res
+                return res
+            contract.side_effect = wrapper_factory
+            self.sci = SCIImplementation(
+                self.geth_client,
+                get_eth_address(),
+                monitor=False)
+        self.gntw = self.contracts[GolemNetworkTokenWrapped.ADDRESS]
 
     def test_eth_address(self):
         assert get_eth_address() == self.sci.get_eth_address()
@@ -39,7 +47,7 @@ class SCIImplementationTest(unittest.TestCase):
         filter_id = 3
         events = []
 
-        self.geth_client.new_filter.return_value = filter_id
+        self.gntw.on.return_value = filter_id
         self.geth_client.get_filter_logs.return_value = []
         self.sci.subscribe_to_incoming_batch_transfers(
             receiver_address,
@@ -48,11 +56,11 @@ class SCIImplementationTest(unittest.TestCase):
             required_confs,
         )
 
-        self.geth_client.new_filter.assert_called_once_with(
-            address=GolemNetworkTokenWrapped.ADDRESS,
-            topics=[self.sci.TRANSFER_EVENT_ID, None, receiver_address],
-            from_block=from_block,
-            to_block='latest',
+        self.gntw.on.assert_called_once_with(
+            'BatchTransfer',
+            from_block,
+            'latest',
+            {'to': receiver_address},
         )
         self.geth_client.get_filter_logs.assert_called_once_with(filter_id)
 
@@ -92,12 +100,14 @@ class SCIImplementationTest(unittest.TestCase):
         from_block = 10
         to_block = 20
         data = '0x00000000000000000000000000000000000000000000000002501e734690aaab000000000000000000000000000000000000000000000000000000005a6af820'  # noqa
+        filter_id = 123
 
-        self.geth_client.get_logs.return_value = [{
+        self.geth_client.get_filter_logs.return_value = [{
             'transactionHash': tx_hash,
             'topics': ['', '0x' + '0' * 24 + sender_address[2:]],
             'data': data,
         }]
+        self.gntw.on.return_value = filter_id
 
         events = self.sci.get_incoming_batch_tranfers(
             sender_address,
@@ -105,11 +115,8 @@ class SCIImplementationTest(unittest.TestCase):
             from_block,
             to_block,
         )
-        self.geth_client.get_logs.assert_called_once_with(
-            address=GolemNetworkTokenWrapped.ADDRESS,
-            topics=[self.sci.TRANSFER_EVENT_ID, sender_address, receiver_address],  # noqa
-            from_block=from_block,
-            to_block=to_block,
+        self.geth_client.get_filter_logs.assert_called_once_with(
+            filter_id,
         )
         assert 1 == len(events)
         assert tx_hash == events[0].tx_hash

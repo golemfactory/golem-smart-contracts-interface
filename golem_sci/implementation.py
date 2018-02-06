@@ -65,6 +65,16 @@ class ContractWrapper:
             data=data,
         )
 
+    def on(self, event_name: str, from_block, to_block, arg_filters):
+        return self._contract.on(
+            event_name,
+            filter_params={
+                'fromBlock': from_block,
+                'toBlock': to_block,
+                'filter': arg_filters,
+            },
+        ).filter_id
+
 
 class SCIImplementation(SmartContractsInterface):
     # Gas price: 20 gwei, Homestead suggested gas price.
@@ -78,9 +88,6 @@ class SCIImplementation(SmartContractsInterface):
     # tx: 21000, balance substract: 5000, arithmetics < 800
     GAS_BATCH_PAYMENT_BASE = 21000 + 800 + 5000
     GAS_FAUCET = 90000
-
-    # keccak256(BatchTransfer(address,address,uint256,uint64))
-    TRANSFER_EVENT_ID = '0x24310ec9df46c171fe9c6d6fe25cac6781e7fa8f153f8f72ce63037a4b38c4b6'  # noqa
 
     def __init__(self, geth_client, address, tx_sign=None, monitor=True):
         """
@@ -156,12 +163,13 @@ class SCIImplementation(SmartContractsInterface):
             payee_address: str,
             from_block: int,
             to_block: int) -> List[BatchTransferEvent]:
-        logs = self._geth_client.get_logs(
-            from_block=from_block,
-            to_block=to_block,
-            address=self._gntw.address,
-            topics=[self.TRANSFER_EVENT_ID, payer_address, payee_address]
+        filter_id = self._gntw.on(
+            'BatchTransfer',
+            from_block,
+            to_block,
+            {'from': payer_address, 'to': payee_address},
         )
+        logs = self._geth_client.get_filter_logs(filter_id)
 
         return [self._raw_log_to_batch_event(raw_log) for raw_log in logs]
 
@@ -172,11 +180,11 @@ class SCIImplementation(SmartContractsInterface):
             cb: Callable[[BatchTransferEvent], None],
             required_confs: int) -> None:
         with self._subs_lock:
-            filter_id = self._geth_client.new_filter(
-                address=self._gntw.address,
-                topics=[self.TRANSFER_EVENT_ID, None, address],
-                from_block=from_block,
-                to_block='latest',
+            filter_id = self._gntw.on(
+                'BatchTransfer',
+                from_block,
+                'latest',
+                {'to': address},
             )
             logs = self._geth_client.get_filter_logs(filter_id)
             for log in logs:
