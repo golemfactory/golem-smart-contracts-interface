@@ -134,6 +134,9 @@ class SCIImplementation(SmartContractsInterface):
         self._awaiting_callbacks = {}
         self._cb_id = 0
 
+        self._awaiting_transactions_lock = threading.Lock()
+        self._awaiting_transactions = []
+
         if monitor:
             thread = threading.Thread(target=self._monitor_blockchain)
             thread.daemon = True
@@ -197,6 +200,14 @@ class SCIImplementation(SmartContractsInterface):
             for log in logs:
                 self._on_filter_log(log, cb, required_confs)
             self._subscriptions.append((filter_id, cb, required_confs))
+
+    def on_transaction_confirmed(
+            self,
+            tx_hash: str,
+            required_confs: int,
+            cb: Callable[[TransactionReceipt], None]) -> None:
+        with self._awaiting_transactions_lock:
+            self._awaiting_transactions.append((tx_hash, required_confs, cb))
 
     def transfer_gnt(self, to_address: str, amount: int) -> str:
         return self._send_transaction(
@@ -290,8 +301,9 @@ class SCIImplementation(SmartContractsInterface):
             for log in logs:
                 self._on_filter_log(log, cb, required_confs)
 
+        block_number = self._geth_client.get_block_number()
+
         if self._awaiting_callbacks:
-            block_number = self._geth_client.get_block_number()
             to_remove = []
             chronological_callbacks = sorted(
                 self._awaiting_callbacks.items(),
@@ -309,6 +321,31 @@ class SCIImplementation(SmartContractsInterface):
 
             for key in to_remove:
                 del self._awaiting_callbacks[key]
+
+        self._process_awaiting_transactions(block_number)
+
+    def _process_awaiting_transactions(self, block_number: int) -> None:
+        with self._awaiting_transactions_lock:
+            awaiting_transactions = self._awaiting_transactions
+
+        def processed(awaiting_tx) -> bool:
+            tx_hash, required_confs, cb = awaiting_tx
+            receipt = self.get_transaction_receipt(tx_hash)
+            if not receipt:
+                return False
+            if receipt.block_number + required_confs < block_number:
+                try:
+                    cb(receipt)
+                except Exception as e:
+                    logger.error(e)
+                return True
+            return False
+
+        remaining_awaiting_transactions = \
+            [tx for tx in awaiting_transactions if not processed(tx)]
+
+        with self._awaiting_transactions_lock:
+            self._awaiting_transactions.extend(remaining_awaiting_transactions)
 
     ########################
     # GNT-GNTW conversions #

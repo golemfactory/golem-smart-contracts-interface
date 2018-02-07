@@ -133,3 +133,45 @@ class SCIImplementationTest(unittest.TestCase):
         assert receiver_address == events[0].receiver
         assert 166666666666666667 == events[0].amount
         assert 1516959776 == events[0].closure_time
+
+    def test_on_transaction_confirmed(self):
+        tx_hash = '0x' + 'a' * 40
+        required_confs = 12
+        gas_used = 1234
+        block_number = 100
+        block_hash = '0xbbb'
+        receipt = []
+
+        def cb(tx_receipt):
+            receipt.append(tx_receipt)
+
+        self.sci.on_transaction_confirmed(tx_hash, required_confs, cb)
+
+        self.geth_client.get_block_number.return_value = block_number - 1
+        self.geth_client.get_transaction_receipt.return_value = None
+        self.sci._pull_changes_from_blockchain()
+        assert not receipt
+
+        self.geth_client.get_block_number.return_value = block_number
+        self.geth_client.get_transaction_receipt.return_value = {
+            'status': '0x1',
+            'gasUsed': gas_used,
+            'blockNumber': block_number,
+            'blockHash': block_hash,
+        }
+        self.sci._pull_changes_from_blockchain()
+        assert not receipt
+
+        self.geth_client.get_block_number.return_value = \
+            block_number + required_confs - 1
+        self.sci._pull_changes_from_blockchain()
+        assert not receipt
+
+        self.geth_client.get_block_number.return_value = \
+            block_number + required_confs + 1
+        self.sci._pull_changes_from_blockchain()
+        assert receipt
+        assert receipt[0].status
+        assert gas_used == receipt[0].gas_used
+        assert block_number == receipt[0].block_number
+        assert block_hash == receipt[0].block_hash

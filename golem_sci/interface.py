@@ -84,6 +84,18 @@ class SmartContractsInterface(object, metaclass=abc.ABCMeta):
         """
         pass
 
+    @abc.abstractmethod
+    def on_transaction_confirmed(
+            self,
+            tx_hash: str,
+            required_confs: int,
+            cb: Callable[[TransactionReceipt], None]) -> None:
+        """
+        Will invoke callback after the transaction has been confirmed
+        required number of times.
+        """
+        pass
+
     # Transaction
     @abc.abstractmethod
     def transfer_gnt(self, to_address: str, amount: int) -> str:
