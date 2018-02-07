@@ -178,7 +178,7 @@ class SCIImplementation(SmartContractsInterface):
         )
         logs = self._geth_client.get_filter_logs(filter_id)
 
-        return [self._raw_log_to_batch_event(raw_log) for raw_log in logs]
+        return [BatchTransferEvent(raw_log) for raw_log in logs]
 
     def subscribe_to_incoming_batch_transfers(
             self,
@@ -262,23 +262,13 @@ class SCIImplementation(SmartContractsInterface):
                 logger.error(e)
             time.sleep(15)
 
-    @classmethod
-    def _raw_log_to_batch_event(cls, raw_log) -> BatchTransferEvent:
-        return BatchTransferEvent(
-            tx_hash=raw_log['transactionHash'],
-            sender='0x' + raw_log['topics'][1][26:],
-            receiver='0x' + raw_log['topics'][2][26:],
-            amount=int(raw_log['data'][2:66], 16),
-            closure_time=int(raw_log['data'][66:130], 16),
-        )
-
     def _on_filter_log(self, log, cb, required_confs: int) -> None:
         tx_hash = log['transactionHash']
         if log['removed']:
             del self._awaiting_callbacks[tx_hash]
         else:
             cb_copy = cb
-            event = self._raw_log_to_batch_event(log)
+            event = BatchTransferEvent(log)
             logger.info('Detected incoming batch transfer {}, '
                         'waiting for confirmations'.format(event))
 
