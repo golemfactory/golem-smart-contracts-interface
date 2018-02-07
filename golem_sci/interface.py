@@ -1,4 +1,4 @@
-from typing import Callable, Optional, List
+from typing import Any, Callable, Dict, Optional, List
 import abc
 
 from .events import (
@@ -7,6 +7,14 @@ from .events import (
     ForcedSubtaskPaymentEvent,
     CoverAdditionalVerificationEvent,
 )
+
+
+class TransactionReceipt:
+    def __init__(self, raw_receipt: Dict[str, Any]):
+        self.status = raw_receipt['status'] == '0x1'
+        self.block_hash = raw_receipt['blockHash']
+        self.block_number = raw_receipt['blockNumber']
+        self.gas_used = raw_receipt['gasUsed']
 
 
 class SmartContractsInterface(object, metaclass=abc.ABCMeta):
@@ -41,6 +49,15 @@ class SmartContractsInterface(object, metaclass=abc.ABCMeta):
     def get_gntw_balance(self, address: str) -> Optional[int]:
         """
         Returns GNTW balance in wei or None is case of issues.
+        """
+        pass
+
+    @abc.abstractmethod
+    def get_transaction_receipt(
+            self,
+            tx_hash: str) -> Optional[TransactionReceipt]:
+        """
+        Returns transaction receipt or None if it hasn't been mined yet.
         """
         pass
 

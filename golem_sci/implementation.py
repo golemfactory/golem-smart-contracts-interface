@@ -1,7 +1,7 @@
 import logging
 import threading
 import time
-from typing import Any, Callable, Dict, List, Optional
+from typing import Callable, List, Optional
 
 from ethereum import abi
 from ethereum.utils import zpad, int_to_big_endian
@@ -9,7 +9,7 @@ from ethereum.transactions import Transaction
 from eth_utils import decode_hex
 
 from golem_sci import contracts
-from .interface import SmartContractsInterface
+from .interface import SmartContractsInterface, TransactionReceipt
 
 from .events import (
     BatchTransferEvent,
@@ -220,8 +220,11 @@ class SCIImplementation(SmartContractsInterface):
     def get_block_number(self) -> int:
         return self._geth_client.get_block_number()
 
-    def get_transaction_receipt(self, tx_hash: str) -> Optional[Dict[str, Any]]:
-        return self._geth_client.get_transaction_receipt(tx_hash)
+    def get_transaction_receipt(
+            self,
+            tx_hash: str) -> Optional[TransactionReceipt]:
+        raw = self._geth_client.get_transaction_receipt(tx_hash)
+        return TransactionReceipt(raw) if raw else None
 
     def request_gnt_from_faucet(self) -> str:
         return self._send_transaction(
