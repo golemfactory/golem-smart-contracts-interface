@@ -62,7 +62,7 @@ class SmartContractsInterface(object, metaclass=abc.ABCMeta):
         pass
 
     @abc.abstractmethod
-    def get_incoming_batch_tranfers(
+    def get_batch_tranfers(
             self,
             payer_address: str,
             payee_address: str,

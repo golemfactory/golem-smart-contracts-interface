@@ -164,7 +164,7 @@ class SCIImplementation(SmartContractsInterface):
             gas,
         )
 
-    def get_incoming_batch_tranfers(
+    def get_batch_tranfers(
             self,
             payer_address: str,
             payee_address: str,
