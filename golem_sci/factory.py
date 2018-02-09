@@ -1,3 +1,4 @@
+import time
 from typing import Callable
 
 from ethereum.transactions import Transaction
@@ -41,6 +42,7 @@ def new_sci(
         chain: str=CHAIN_RINKEBY) -> SmartContractsInterface:
     if chain != CHAIN_RINKEBY:
         raise Exception('Unsupported chain {}'.format(chain))
+    _ensure_connection(web3)
     _ensure_genesis(web3, chain)
     return SCIImplementation(Client(web3), address, tx_sign)
 
@@ -55,3 +57,12 @@ def _ensure_genesis(web3: Web3, chain: str):
                 genesis_hash,
             )
         )
+
+
+def _ensure_connection(web3: Web3):
+    RETRY_COUNT = 10
+    for _ in range(RETRY_COUNT):
+        if web3.isConnected():
+            return
+        time.sleep(1)
+    raise Exception('Could not connect to geth: {}'.format(web3.providers))
