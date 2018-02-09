@@ -14,6 +14,7 @@ setup(
         'ethereum==1.6.1',
         'ethereum-utils==0.5.1',
         'pytz',
+        'web3==3.8.0',
     ],
     tests_require=[
         'mock',
