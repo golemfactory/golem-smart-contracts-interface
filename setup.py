@@ -12,6 +12,7 @@ setup(
     python_requires='>=3.5',
     install_requires=[
         'ethereum==1.6.1',
+        'ethereum-abi-utils==0.4.0',
         'ethereum-utils==0.5.1',
         'pytz',
         'web3==3.8.0',
