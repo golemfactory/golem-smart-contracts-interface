@@ -154,6 +154,7 @@ class SCIImplementationTest(unittest.TestCase):
 
         self.geth_client.get_block_number.return_value = block_number
         self.geth_client.get_transaction_receipt.return_value = {
+            'transactionHash': tx_hash,
             'status': '0x1',
             'gasUsed': gas_used,
             'blockNumber': block_number,
