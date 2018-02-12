@@ -170,8 +170,12 @@ class SCIImplementationTest(unittest.TestCase):
         self.geth_client.get_block_number.return_value = \
             block_number + required_confs + 1
         self.sci._pull_changes_from_blockchain()
-        assert receipt
+        assert 1 == len(receipt)
         assert receipt[0].status
         assert gas_used == receipt[0].gas_used
         assert block_number == receipt[0].block_number
         assert block_hash == receipt[0].block_hash
+
+        del receipt[:]
+        self.sci._pull_changes_from_blockchain()
+        assert not receipt

@@ -335,6 +335,7 @@ class SCIImplementation(SmartContractsInterface):
     def _process_awaiting_transactions(self, block_number: int) -> None:
         with self._awaiting_transactions_lock:
             awaiting_transactions = self._awaiting_transactions
+            self._awaiting_transactions = []
 
         def processed(awaiting_tx) -> bool:
             tx_hash, required_confs, cb = awaiting_tx
