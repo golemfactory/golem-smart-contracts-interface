@@ -137,10 +137,15 @@ class SCIImplementation(SmartContractsInterface):
         self._awaiting_transactions_lock = threading.Lock()
         self._awaiting_transactions = []
 
+        self._monitor_thread = None
+        self._monitor_stop = threading.Event()
+
         if monitor:
-            thread = threading.Thread(target=self._monitor_blockchain)
-            thread.daemon = True
-            thread.start()
+            self._monitor_thread = threading.Thread(
+                target=self._monitor_blockchain,
+                daemon=True
+            )
+            self._monitor_thread.start()
 
     def get_eth_address(self) -> str:
         return self._address
@@ -251,6 +256,9 @@ class SCIImplementation(SmartContractsInterface):
     def is_synchronized(self) -> bool:
         return self._geth_client.is_synchronized()
 
+    def stop(self) -> None:
+        self._monitor_stop.set()
+
     def _send_transaction(
             self,
             contract,
@@ -268,7 +276,7 @@ class SCIImplementation(SmartContractsInterface):
         return self._geth_client.send(tx)
 
     def _monitor_blockchain(self):
-        while True:
+        while not self._monitor_stop.is_set():
             try:
                 self.wait_until_synchronized()
                 self._pull_changes_from_blockchain()
