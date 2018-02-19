@@ -11,6 +11,10 @@ from ethereum.utils import zpad
 logger = logging.getLogger('golem_sci.client')
 
 
+class FilterNotFoundException(Exception):
+    pass
+
+
 def datetime_to_timestamp(then):
     return timegm(then.utctimetuple()) + then.microsecond / 1000000.0
 
@@ -183,7 +187,9 @@ class Client(object):
         Returns all new entries which occurred since the
         last call to this method for the given filter_id
         """
-        return self.web3.eth.getFilterChanges(filter_id)
+        return Client._convert_filter_not_found_error(
+            lambda: self.web3.eth.getFilterChanges(filter_id),
+        )
 
     def get_filter_logs(self, filter_id):
         """
@@ -192,7 +198,18 @@ class Client(object):
         :return:
         Returns all entries which match the filter
         """
-        return self.web3.eth.getFilterLogs(filter_id)
+        return Client._convert_filter_not_found_error(
+            lambda: self.web3.eth.getFilterLogs(filter_id),
+        )
+
+    @staticmethod
+    def _convert_filter_not_found_error(f):
+        try:
+            return f()
+        except ValueError as e:
+            if e.args[0]['message'] == 'filter not found':
+                raise FilterNotFoundException()
+            raise e
 
     def get_logs(self,
                  from_block=None,

@@ -2,8 +2,9 @@ import json
 import unittest.mock as mock
 import unittest
 
-from golem_sci.implementation import SCIImplementation
+from golem_sci.client import FilterNotFoundException
 from golem_sci.contracts import GolemNetworkTokenWrapped
+from golem_sci.implementation import SCIImplementation
 
 
 def get_eth_address():
@@ -44,7 +45,7 @@ class SCIImplementationTest(unittest.TestCase):
         block_number = 100
         from_block = 10
         data = '0x00000000000000000000000000000000000000000000000002501e734690aaab000000000000000000000000000000000000000000000000000000005a6af820'  # noqa
-        filter_id = 3
+        filter_id = '0x3'
         events = []
 
         self.gntw.on.return_value = filter_id
@@ -98,6 +99,28 @@ class SCIImplementationTest(unittest.TestCase):
         self.sci._monitor_blockchain_single()
         assert 0 == len(events)
 
+        # Testing network loss and recreating filter.
+        new_filter_id = '0xddd'
+        self.geth_client.get_filter_changes.reset_mock()
+        self.geth_client.get_filter_changes.side_effect = \
+            FilterNotFoundException()
+        self.gntw.on.reset_mock()
+        self.gntw.on.return_value = new_filter_id
+        self.geth_client.get_filter_logs.reset_mock()
+
+        self.sci._monitor_blockchain_single()
+
+        self.gntw.on.assert_called_once_with(
+            'BatchTransfer',
+            block_number + required_confs,
+            'latest',
+            {'to': receiver_address},
+        )
+        self.geth_client.get_filter_logs.assert_called_once_with(
+            new_filter_id,
+        )
+        assert 0 == len(events)
+
     def test_get_batch_tranfers(self):
         receiver_address = '0x' + 'f' * 40
         sender_address = '0x' + 'e' * 40
@@ -105,7 +128,7 @@ class SCIImplementationTest(unittest.TestCase):
         from_block = 10
         to_block = 20
         data = '0x00000000000000000000000000000000000000000000000002501e734690aaab000000000000000000000000000000000000000000000000000000005a6af820'  # noqa
-        filter_id = 123
+        filter_id = '0x123'
 
         self.geth_client.get_filter_logs.return_value = [{
             'transactionHash': tx_hash,

@@ -10,7 +10,7 @@ from eth_utils import decode_hex
 
 from golem_sci import contracts
 from .interface import SmartContractsInterface, TransactionReceipt
-
+from .client import Client, FilterNotFoundException
 from .events import (
     BatchTransferEvent,
     ForcedPaymentEvent,
@@ -43,6 +43,19 @@ def encode_payments(payments):
                 "Incorrect pair length: {}. Should be 32".format(len(pair)))
         args.append(pair)
     return args
+
+
+class SubscriptionFilter:
+    def __init__(
+            self,
+            address: str,
+            cb,
+            required_confs: int,
+            from_block: int):
+        self.address = address
+        self.cb = cb
+        self.required_confs = required_confs
+        self.last_pulled_block = from_block
 
 
 class ContractWrapper:
@@ -96,7 +109,12 @@ class SCIImplementation(SmartContractsInterface):
     GAS_BATCH_PAYMENT_BASE = 21000 + 800 + 5000
     GAS_FAUCET = 90000
 
-    def __init__(self, geth_client, address, tx_sign=None, monitor=True):
+    def __init__(
+            self,
+            geth_client: Client,
+            address: str,
+            tx_sign=None,
+            monitor=True):
         """
         Performs all blockchain operations using the address as the caller.
         Uses tx_sign to sign outgoing transaction, tx_sign can be None in which
@@ -129,7 +147,7 @@ class SCIImplementation(SmartContractsInterface):
         )
 
         self._subs_lock = threading.Lock()
-        self._subscriptions = []
+        self._subscriptions = {}
 
         self._awaiting_callbacks = {}
         self._cb_id = 0
@@ -204,7 +222,13 @@ class SCIImplementation(SmartContractsInterface):
             logs = self._geth_client.get_filter_logs(filter_id)
             for log in logs:
                 self._on_filter_log(log, cb, required_confs)
-            self._subscriptions.append((filter_id, cb, required_confs))
+            print(filter_id)
+            self._subscriptions[filter_id] = SubscriptionFilter(
+                address,
+                cb,
+                required_confs,
+                from_block,
+            )
 
     def on_transaction_confirmed(
             self,
@@ -311,10 +335,23 @@ class SCIImplementation(SmartContractsInterface):
     def _pull_changes_from_blockchain(self, block_number: int) -> None:
         with self._subs_lock:
             subs = self._subscriptions.copy()
-        for filter_id, cb, required_confs in subs:
-            logs = self._geth_client.get_filter_changes(filter_id)
-            for log in logs:
-                self._on_filter_log(log, cb, required_confs)
+        for filter_id, sub in subs.items():
+            try:
+                logs = self._geth_client.get_filter_changes(filter_id)
+                for log in logs:
+                    self._on_filter_log(log, sub.cb, sub.required_confs)
+                sub.last_pulled_block = block_number
+            except FilterNotFoundException as e:
+                logger.warning('Filter not found error, probably caused by'
+                               ' network loss. Recreating.')
+                with self._subs_lock:
+                    del self._subscriptions[filter_id]
+                self.subscribe_to_incoming_batch_transfers(
+                    sub.address,
+                    sub.last_pulled_block,
+                    sub.cb,
+                    sub.required_confs,
+                )
 
         if self._awaiting_callbacks:
             to_remove = []
@@ -325,8 +362,10 @@ class SCIImplementation(SmartContractsInterface):
             for key, (cb, _, required_block) in chronological_callbacks:
                 if block_number >= required_block:
                     try:
-                        logger.info('Incoming batch transfer confirmed {}'
-                                    .format(key))
+                        logger.info(
+                            'Incoming batch transfer confirmed %r',
+                            key,
+                        )
                         cb()
                     except Exception as e:
                         logger.error(e)
