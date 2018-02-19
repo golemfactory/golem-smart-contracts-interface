@@ -222,7 +222,6 @@ class SCIImplementation(SmartContractsInterface):
             logs = self._geth_client.get_filter_logs(filter_id)
             for log in logs:
                 self._on_filter_log(log, cb, required_confs)
-            print(filter_id)
             self._subscriptions[filter_id] = SubscriptionFilter(
                 address,
                 cb,
