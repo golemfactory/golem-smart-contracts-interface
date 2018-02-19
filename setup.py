@@ -17,7 +17,4 @@ setup(
         'pytz',
         'web3==3.8.0',
     ],
-    tests_require=[
-        'mock',
-    ],
 )
