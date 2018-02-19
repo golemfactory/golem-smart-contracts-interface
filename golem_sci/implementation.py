@@ -278,11 +278,16 @@ class SCIImplementation(SmartContractsInterface):
     def _monitor_blockchain(self):
         while not self._monitor_stop.is_set():
             try:
-                self.wait_until_synchronized()
-                self._pull_changes_from_blockchain()
+                self._monitor_blockchain_single()
             except Exception as e:
                 logger.error('Blockchain monitor exception: %r', e)
             time.sleep(15)
+
+    def _monitor_blockchain_single(self):
+        self.wait_until_synchronized()
+        block_number = self._geth_client.get_block_number()
+        self._pull_changes_from_blockchain(block_number)
+        self._process_awaiting_transactions(block_number)
 
     def _on_filter_log(self, log, cb, required_confs: int) -> None:
         tx_hash = log['transactionHash']
@@ -303,15 +308,13 @@ class SCIImplementation(SmartContractsInterface):
             )
             self._cb_id += 1
 
-    def _pull_changes_from_blockchain(self) -> None:
+    def _pull_changes_from_blockchain(self, block_number: int) -> None:
         with self._subs_lock:
             subs = self._subscriptions.copy()
         for filter_id, cb, required_confs in subs:
             logs = self._geth_client.get_filter_changes(filter_id)
             for log in logs:
                 self._on_filter_log(log, cb, required_confs)
-
-        block_number = self._geth_client.get_block_number()
 
         if self._awaiting_callbacks:
             to_remove = []
@@ -331,8 +334,6 @@ class SCIImplementation(SmartContractsInterface):
 
             for key in to_remove:
                 del self._awaiting_callbacks[key]
-
-        self._process_awaiting_transactions(block_number)
 
     def _process_awaiting_transactions(self, block_number: int) -> None:
         with self._awaiting_transactions_lock:

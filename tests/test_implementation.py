@@ -78,14 +78,14 @@ class SCIImplementationTest(unittest.TestCase):
             } for tx_hash in tx_hashes
         ]
         self.geth_client.get_block_number.return_value = block_number
-        self.sci._pull_changes_from_blockchain()
+        self.sci._monitor_blockchain_single()
         self.geth_client.get_filter_changes.assert_called_once_with(filter_id)
         assert 0 == len(events)
 
         self.geth_client.get_filter_changes.return_value = []
         self.geth_client.get_block_number.return_value = \
             block_number + required_confs
-        self.sci._pull_changes_from_blockchain()
+        self.sci._monitor_blockchain_single()
         assert len(tx_hashes) == len(events)
         for i, tx_hash in enumerate(tx_hashes):
             assert tx_hash == events[i].tx_hash
@@ -95,7 +95,7 @@ class SCIImplementationTest(unittest.TestCase):
             assert 1516959776 == events[i].closure_time
         events = []
 
-        self.sci._pull_changes_from_blockchain()
+        self.sci._monitor_blockchain_single()
         assert 0 == len(events)
 
     def test_get_batch_tranfers(self):
@@ -149,7 +149,7 @@ class SCIImplementationTest(unittest.TestCase):
 
         self.geth_client.get_block_number.return_value = block_number - 1
         self.geth_client.get_transaction_receipt.return_value = None
-        self.sci._pull_changes_from_blockchain()
+        self.sci._monitor_blockchain_single()
         assert not receipt
 
         self.geth_client.get_block_number.return_value = block_number
@@ -160,17 +160,17 @@ class SCIImplementationTest(unittest.TestCase):
             'blockNumber': block_number,
             'blockHash': block_hash,
         }
-        self.sci._pull_changes_from_blockchain()
+        self.sci._monitor_blockchain_single()
         assert not receipt
 
         self.geth_client.get_block_number.return_value = \
             block_number + required_confs - 1
-        self.sci._pull_changes_from_blockchain()
+        self.sci._monitor_blockchain_single()
         assert not receipt
 
         self.geth_client.get_block_number.return_value = \
             block_number + required_confs + 1
-        self.sci._pull_changes_from_blockchain()
+        self.sci._monitor_blockchain_single()
         assert 1 == len(receipt)
         assert receipt[0].status
         assert gas_used == receipt[0].gas_used
@@ -178,5 +178,5 @@ class SCIImplementationTest(unittest.TestCase):
         assert block_hash == receipt[0].block_hash
 
         del receipt[:]
-        self.sci._pull_changes_from_blockchain()
+        self.sci._monitor_blockchain_single()
         assert not receipt
