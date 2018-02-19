@@ -281,7 +281,7 @@ class SCIImplementation(SmartContractsInterface):
                 self.wait_until_synchronized()
                 self._pull_changes_from_blockchain()
             except Exception as e:
-                logger.error(e)
+                logger.error('Blockchain monitor exception: %r', e)
             time.sleep(15)
 
     def _on_filter_log(self, log, cb, required_confs: int) -> None:
@@ -291,8 +291,10 @@ class SCIImplementation(SmartContractsInterface):
         else:
             cb_copy = cb
             event = BatchTransferEvent(log)
-            logger.info('Detected incoming batch transfer {}, '
-                        'waiting for confirmations'.format(event))
+            logger.info(
+                'Detected incoming batch transfer %r, waiting for confirmation',
+                event,
+            )
 
             self._awaiting_callbacks[tx_hash] = (
                 lambda: cb_copy(event),
@@ -346,7 +348,11 @@ class SCIImplementation(SmartContractsInterface):
                 try:
                     cb(receipt)
                 except Exception as e:
-                    logger.error(e)
+                    logger.error(
+                        'Confirmed transaction %r callback error: %r',
+                        tx_hash,
+                        e,
+                    )
                 return True
             return False
 
