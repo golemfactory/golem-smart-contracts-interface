@@ -3,12 +3,12 @@ import threading
 import time
 from typing import Callable, List, Optional
 
-from ethereum import abi
 from ethereum.utils import zpad, int_to_big_endian
 from ethereum.transactions import Transaction
 from eth_utils import decode_hex
 
 from golem_sci import contracts
+from .contractwrapper import ContractWrapper
 from .interface import SmartContractsInterface, TransactionReceipt
 from .client import Client, FilterNotFoundException
 from .events import (
@@ -58,44 +58,6 @@ class SubscriptionFilter:
         self.last_pulled_block = from_block
 
 
-class ContractWrapper:
-    def __init__(self, actor_address, contract):
-        self._actor_address = actor_address
-        self._contract = contract
-        self._translator = abi.ContractTranslator(contract.abi)
-        self.address = contract.address
-
-    def call(self):
-        return self._contract.call({'from': self._actor_address})
-
-    def create_transaction(
-            self,
-            function_name,
-            args,
-            nonce,
-            gas_price,
-            gas_limit) -> Transaction:
-        data = self._translator.encode_function_call(function_name, args)
-        return Transaction(
-            nonce=nonce,
-            gasprice=gas_price,
-            startgas=gas_limit,
-            to=decode_hex(self._contract.address),
-            value=0,
-            data=data,
-        )
-
-    def on(self, event_name: str, from_block, to_block, arg_filters):
-        return self._contract.on(
-            event_name,
-            filter_params={
-                'fromBlock': from_block,
-                'toBlock': to_block,
-                'filter': arg_filters,
-            },
-        ).filter_id
-
-
 class SCIImplementation(SmartContractsInterface):
     # Gas price: 20 gwei, Homestead suggested gas price.
     GAS_PRICE = 20 * 10 ** 9
@@ -124,27 +86,20 @@ class SCIImplementation(SmartContractsInterface):
         self._address = address
         self._tx_sign = tx_sign
 
-        self._gntw = ContractWrapper(
-            address,
-            self._geth_client.contract(
-                contracts.GolemNetworkTokenWrapped.ADDRESS,
-                contracts.GolemNetworkTokenWrapped.ABI,
-            ),
-        )
-        self._gnt = ContractWrapper(
-            address,
-            self._geth_client.contract(
-                contracts.GolemNetworkToken.ADDRESS,
-                contracts.GolemNetworkToken.ABI,
-            ),
-        )
-        self._faucet = ContractWrapper(
-            address,
-            self._geth_client.contract(
-                contracts.Faucet.ADDRESS,
-                contracts.Faucet.ABI,
-            ),
-        )
+        def make_contract_wrapper(contract_class):
+            return ContractWrapper(
+                address,
+                self._geth_client.contract(
+                    contract_class.ADDRESS,
+                    contract_class.ABI,
+                ),
+            )
+        self._gntw = make_contract_wrapper(contracts.GolemNetworkTokenWrapped)
+        self._gnt = make_contract_wrapper(contracts.GolemNetworkToken)
+        self._faucet = make_contract_wrapper(contracts.Faucet)
+        self._gntdeposit = make_contract_wrapper(contracts.GNTDeposit)
+        self._gntpaymentchannels = \
+            make_contract_wrapper(contracts.GNTPaymentChannels)
 
         self._subs_lock = threading.Lock()
         self._subscriptions = {}
