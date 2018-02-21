@@ -166,6 +166,21 @@ class SmartContractsInterface(object, metaclass=abc.ABCMeta):
 
     # Transaction
     @abc.abstractmethod
+    def deposit_payment(self, value: int) -> str:
+        pass
+
+    # Transaction
+    @abc.abstractmethod
+    def unlock_deposit(self) -> str:
+        pass
+
+    # Transaction
+    @abc.abstractmethod
+    def withdraw_deposit(self) -> str:
+        pass
+
+    # Transaction
+    @abc.abstractmethod
     def force_subtask_payment(
             self,
             requestor_address: str,

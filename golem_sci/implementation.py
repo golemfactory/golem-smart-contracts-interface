@@ -403,6 +403,15 @@ class SCIImplementation(SmartContractsInterface):
             to_block: int) -> List[ForcedSubtaskPaymentEvent]:
         raise Exception("Not implemented yet")
 
+    def deposit_payment(self, value: int) -> str:
+        raise Exception("Not implemented yet")
+
+    def unlock_deposit(self) -> str:
+        raise Exception("Not implemented yet")
+
+    def withdraw_deposit(self) -> str:
+        raise Exception("Not implemented yet")
+
     def force_payment(
             self,
             requestor_address: str,
