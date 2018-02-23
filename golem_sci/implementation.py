@@ -70,6 +70,10 @@ class SCIImplementation(SmartContractsInterface):
     # tx: 21000, balance substract: 5000, arithmetics < 800
     GAS_BATCH_PAYMENT_BASE = 21000 + 800 + 5000
     GAS_FAUCET = 90000
+    # Concent methods
+    GAS_UNLOCK_DEPOSIT = 55000
+    GAS_FORCE_PAYMENT = 80000
+    GAS_WITHDRAW_DEPOSIT = 75000
 
     def __init__(
             self,
@@ -204,7 +208,7 @@ class SCIImplementation(SmartContractsInterface):
         return self._send_transaction(
             self._gntw,
             'transfer',
-            [decode_hex(to_address), amount],
+            [decode_hex(to_address), amount, b''],
             self.GAS_TRANSFER,
         )
 
@@ -404,13 +408,23 @@ class SCIImplementation(SmartContractsInterface):
         raise Exception("Not implemented yet")
 
     def deposit_payment(self, value: int) -> str:
-        raise Exception("Not implemented yet")
+        return self.transfer_gntw(self._gntdeposit.address, value)
 
     def unlock_deposit(self) -> str:
-        raise Exception("Not implemented yet")
+        return self._send_transaction(
+            self._gntdeposit,
+            'unlock',
+            [],
+            self.GAS_UNLOCK_DEPOSIT,
+        )
 
     def withdraw_deposit(self) -> str:
-        raise Exception("Not implemented yet")
+        return self._send_transaction(
+            self._gntdeposit,
+            'withdraw',
+            [decode_hex(self._address)],
+            self.GAS_WITHDRAW_DEPOSIT,
+        )
 
     def force_payment(
             self,
@@ -418,7 +432,12 @@ class SCIImplementation(SmartContractsInterface):
             provider_address: str,
             value: int,
             closure_time: int) -> str:
-        raise Exception("Not implemented yet")
+        return self._send_transaction(
+            self._gntdeposit,
+            'reimburseForNoPayment',
+            [requestor_address, provider_address, value, closure_time],
+            self.GAS_FORCE_PAYMENT,
+        )
 
     def get_forced_payments(
             self,
@@ -426,7 +445,15 @@ class SCIImplementation(SmartContractsInterface):
             provider_address: str,
             from_block: int,
             to_block: int) -> List[ForcedPaymentEvent]:
-        raise Exception("Not implemented yet")
+        filter_id = self._gntdeposit.on(
+            'ReimburseForNoPayment',
+            from_block,
+            to_block,
+            {'_requestor': requestor_address, '_provider': provider_address},
+        )
+        logs = self._geth_client.get_filter_logs(filter_id)
+
+        return [ForcedPaymentEvent(raw_log) for raw_log in logs]
 
     def cover_additional_verification_cost(
             self,
@@ -445,9 +472,9 @@ class SCIImplementation(SmartContractsInterface):
     def get_deposit_value(
             self,
             account_address: str) -> Optional[int]:
-        raise Exception("Not implemented yet")
+        return self._gntdeposit.call().balanceOf(decode_hex(account_address))
 
     def get_deposit_locked_until(
             self,
             account_address: str) -> Optional[int]:
-        raise Exception("Not implemented yet")
+        return self._gntdeposit.call().getTimelock(decode_hex(account_address))
