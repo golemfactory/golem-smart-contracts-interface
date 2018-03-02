@@ -233,3 +233,10 @@ class IntegrationTest(unittest.TestCase):
         assert forced_payments[0].provider == provider
         assert forced_payments[0].amount == value
         assert forced_payments[0].closure_time == closure_time
+
+    def test_gntw_transfer(self):
+        self._create_gntw()
+        recipient = '0x' + 40 * 'a'
+        amount = 123
+        self.sci.transfer_gntw(recipient, amount)
+        assert self.sci.get_gntw_balance(recipient) == amount

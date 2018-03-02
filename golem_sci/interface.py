@@ -12,7 +12,7 @@ from .events import (
 class TransactionReceipt:
     def __init__(self, raw_receipt: Dict[str, Any]):
         self.tx_hash = raw_receipt['transactionHash']
-        self.status = raw_receipt['status'] == '0x1'
+        self.status = raw_receipt['status'] == 1
         self.block_hash = raw_receipt['blockHash']
         self.block_number = raw_receipt['blockNumber']
         self.gas_used = raw_receipt['gasUsed']
