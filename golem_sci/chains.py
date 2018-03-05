@@ -1,0 +1,2 @@
+MAINNET = 'mainnet'
+RINKEBY = 'rinkeby'

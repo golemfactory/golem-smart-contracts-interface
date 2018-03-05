@@ -7,19 +7,18 @@ from distutils.version import StrictVersion
 from ethereum.transactions import Transaction
 from web3 import Web3, IPCProvider, HTTPProvider
 
+from . import chains
 from .client import Client
 from .implementation import SCIImplementation
 from .interface import SmartContractsInterface
 
 logger = logging.getLogger("golem_sci.factory")
 
-CHAIN_MAINNET = 'mainnet'
-CHAIN_RINKEBY = 'rinkeby'
 
 GENESES = {
-    CHAIN_MAINNET:
+    chains.MAINNET:
         '0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3',
-    CHAIN_RINKEBY:
+    chains.RINKEBY:
         '0x6341fd3daf94b748c72ced5a5b26028f2474f5f00d824504e4fa37a75767e177',
 }
 
@@ -31,7 +30,7 @@ def new_sci_ipc(
         ipc: str,
         address: str,
         tx_sign: Callable[[Transaction], None]=None,
-        chain: str=CHAIN_RINKEBY) -> SmartContractsInterface:
+        chain: str=chains.RINKEBY) -> SmartContractsInterface:
     return new_sci(Web3(IPCProvider(ipc)), address, tx_sign, chain)
 
 
@@ -39,7 +38,7 @@ def new_sci_rpc(
         rpc: str,
         address: str,
         tx_sign: Callable[[Transaction], None]=None,
-        chain: str=CHAIN_RINKEBY) -> SmartContractsInterface:
+        chain: str=chains.RINKEBY) -> SmartContractsInterface:
     return new_sci(Web3(HTTPProvider(rpc)), address, tx_sign, chain)
 
 
@@ -47,8 +46,8 @@ def new_sci(
         web3: Web3,
         address: str,
         tx_sign: Callable[[Transaction], None]=None,
-        chain: str=CHAIN_RINKEBY) -> SmartContractsInterface:
-    if chain != CHAIN_RINKEBY:
+        chain: str=chains.RINKEBY) -> SmartContractsInterface:
+    if chain != chains.RINKEBY:
         raise Exception('Unsupported chain {}'.format(chain))
     _ensure_connection(web3)
     _ensure_geth_version(web3)

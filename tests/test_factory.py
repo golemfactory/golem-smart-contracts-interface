@@ -1,7 +1,8 @@
 import unittest.mock as mock
 import unittest
 
-from golem_sci import new_sci, CHAIN_RINKEBY
+from golem_sci import new_sci
+from golem_sci.chains import RINKEBY
 from golem_sci.factory import (
     GENESES,
     _ensure_connection,
@@ -28,18 +29,18 @@ class SCIImplementationTest(unittest.TestCase):
         eth_address = '0xdeafbeef'
         web3 = mock.Mock()
 
-        new_sci(web3, eth_address, tx_sign, chain=CHAIN_RINKEBY)
+        new_sci(web3, eth_address, tx_sign, chain=RINKEBY)
         ensure_connection.assert_called_once_with(web3)
         ensure_geth_version.assert_called_once_with(web3)
-        ensure_genesis.assert_called_once_with(web3, CHAIN_RINKEBY)
+        ensure_genesis.assert_called_once_with(web3, RINKEBY)
         sci_init.assert_called_once_with(mock.ANY, eth_address, tx_sign)
 
     def test_ensure_genesis_valid(self):
         web3 = mock.Mock()
         web3.eth.getBlock.return_value = {
-            'hash': GENESES[CHAIN_RINKEBY],
+            'hash': GENESES[RINKEBY],
         }
-        _ensure_genesis(web3, CHAIN_RINKEBY)
+        _ensure_genesis(web3, RINKEBY)
         web3.eth.getBlock.assert_called_once_with(0)
 
     def test_ensure_genesis_invalid(self):
@@ -48,7 +49,7 @@ class SCIImplementationTest(unittest.TestCase):
             'hash': '0xaaa',
         }
         with self.assertRaises(Exception):
-            _ensure_genesis(web3, CHAIN_RINKEBY)
+            _ensure_genesis(web3, RINKEBY)
         web3.eth.getBlock.assert_called_once_with(0)
 
     def test_ensure_connection(self):
