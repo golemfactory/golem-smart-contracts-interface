@@ -3,7 +3,7 @@ import unittest.mock as mock
 import unittest
 
 from golem_sci.client import FilterNotFoundException
-from golem_sci.contracts import GolemNetworkTokenWrapped
+from golem_sci.contracts import GolemNetworkTokenBatching
 from golem_sci.implementation import SCIImplementation
 
 
@@ -32,7 +32,7 @@ class SCIImplementationTest(unittest.TestCase):
                 self.geth_client,
                 get_eth_address(),
                 monitor=False)
-        self.gntw = self.contracts[GolemNetworkTokenWrapped.ADDRESS]
+        self.gntw = self.contracts[GolemNetworkTokenBatching.ADDRESS]
 
     def test_eth_address(self):
         assert get_eth_address() == self.sci.get_eth_address()

@@ -98,7 +98,7 @@ class SCIImplementation(SmartContractsInterface):
                     contract_class.ABI,
                 ),
             )
-        self._gntw = make_contract_wrapper(contracts.GolemNetworkTokenWrapped)
+        self._gntw = make_contract_wrapper(contracts.GolemNetworkTokenBatching)
         self._gnt = make_contract_wrapper(contracts.GolemNetworkToken)
         self._faucet = make_contract_wrapper(contracts.Faucet)
         self._gntdeposit = make_contract_wrapper(contracts.GNTDeposit)
@@ -208,7 +208,19 @@ class SCIImplementation(SmartContractsInterface):
         return self._send_transaction(
             self._gntw,
             'transfer',
-            [decode_hex(to_address), amount, b''],
+            [decode_hex(to_address), amount],
+            self.GAS_TRANSFER,
+        )
+
+    def transfer_gntw_and_call(
+            self,
+            to_address: str,
+            amount: int,
+            data: bytes) -> str:
+        return self._send_transaction(
+            self._gntw,
+            'transferAndCall',
+            [decode_hex(to_address), amount, data],
             self.GAS_TRANSFER,
         )
 
@@ -364,22 +376,22 @@ class SCIImplementation(SmartContractsInterface):
     # GNT-GNTW conversions #
     ########################
 
-    def create_personal_deposit_slot(self) -> str:
+    def open_gate(self) -> str:
         return self._send_transaction(
             self._gntw,
-            'createPersonalDepositAddress',
+            'openGate',
             [],
             self.GAS_CREATE_PERSONAL_DEPOSIT,
         )
 
-    def get_personal_deposit_slot(self) -> str:
+    def get_gate_address(self) -> str:
         return self._gntw.call()\
-            .getPersonalDepositAddress(decode_hex(self._address))
+            .getGateAddress(decode_hex(self._address))
 
-    def process_personal_deposit_slot(self) -> str:
+    def transfer_from_gate(self) -> str:
         return self._send_transaction(
             self._gntw,
-            'processDeposit',
+            'transferFromGate',
             [],
             self.GAS_PROCESS_DEPOSIT,
         )
@@ -408,7 +420,7 @@ class SCIImplementation(SmartContractsInterface):
         raise Exception("Not implemented yet")
 
     def deposit_payment(self, value: int) -> str:
-        return self.transfer_gntw(self._gntdeposit.address, value)
+        return self.transfer_gntw_and_call(self._gntdeposit.address, value, b'')
 
     def unlock_deposit(self) -> str:
         return self._send_transaction(

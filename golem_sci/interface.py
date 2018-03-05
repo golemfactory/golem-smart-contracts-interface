@@ -109,6 +109,15 @@ class SmartContractsInterface(object, metaclass=abc.ABCMeta):
 
     # Transaction
     @abc.abstractmethod
+    def transfer_gntw_and_call(
+            self,
+            to_address: str,
+            amount: int,
+            data: bytes) -> str:
+        pass
+
+    # Transaction
+    @abc.abstractmethod
     def batch_transfer(self, payments, closure_time: int) -> str:
         pass
 
@@ -118,11 +127,11 @@ class SmartContractsInterface(object, metaclass=abc.ABCMeta):
 
     # Transaction
     @abc.abstractmethod
-    def create_personal_deposit_slot(self) -> str:
+    def open_gate(self) -> str:
         pass
 
     @abc.abstractmethod
-    def get_personal_deposit_slot(self) -> str:
+    def get_gate_address(self) -> str:
         """
         Returns Ethereum address
         """
@@ -130,9 +139,9 @@ class SmartContractsInterface(object, metaclass=abc.ABCMeta):
 
     # Transaction
     @abc.abstractmethod
-    def process_personal_deposit_slot(self) -> str:
+    def transfer_from_gate(self) -> str:
         """
-        Final step which convert the value of the deposit to GNTW
+        Final step which convert the value of the gate to GNTW
         """
         pass
 

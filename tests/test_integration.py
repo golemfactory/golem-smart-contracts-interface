@@ -74,14 +74,14 @@ class IntegrationTest(unittest.TestCase):
     def _deploy_gntw(self, web3):
         addr = self.eth_tester.get_accounts()[0]
         gntw = web3.eth.contract(
-            bytecode=contracts.GolemNetworkTokenWrapped.BIN,
-            abi=json.loads(contracts.GolemNetworkTokenWrapped.ABI),
+            bytecode=contracts.GolemNetworkTokenBatching.BIN,
+            abi=json.loads(contracts.GolemNetworkTokenBatching.ABI),
         )
         gntw_tx = gntw.deploy(
             transaction={'from': addr},
             args=[decode_hex(contracts.GolemNetworkToken.ADDRESS)],
         )
-        contracts.GolemNetworkTokenWrapped.ADDRESS = \
+        contracts.GolemNetworkTokenBatching.ADDRESS = \
             web3.eth.getTransactionReceipt(gntw_tx)['contractAddress']
 
     def _deploy_concents(self, web3):
@@ -94,7 +94,7 @@ class IntegrationTest(unittest.TestCase):
         gnt_deposit_tx = gnt_deposit.deploy(
             transaction={'from': addr},
             args=[
-                decode_hex(contracts.GolemNetworkTokenWrapped.ADDRESS),
+                decode_hex(contracts.GolemNetworkTokenBatching.ADDRESS),
                 decode_hex(self.address),  # oracle
                 decode_hex(self.address),  # coldwallet
                 self.gntdeposit_withdrawal_delay,
@@ -163,10 +163,10 @@ class IntegrationTest(unittest.TestCase):
 
     def _create_gntw(self):
         self.sci.request_gnt_from_faucet()
-        self.sci.create_personal_deposit_slot()
-        pda = self.sci.get_personal_deposit_slot()
+        self.sci.open_gate()
+        pda = self.sci.get_gate_address()
         self.sci.transfer_gnt(pda, 1000 * denoms.ether)
-        self.sci.process_personal_deposit_slot()
+        self.sci.transfer_from_gate()
         assert self.sci.get_gntw_balance(self.address) == 1000 * denoms.ether
 
     def _time_travel(self, period: int):
