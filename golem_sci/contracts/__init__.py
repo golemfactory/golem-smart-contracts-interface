@@ -1,5 +1,5 @@
 from .faucet import Faucet  # noqa
-from .gnt import GolemNetworkToken  # noqa
-from .gntw import GolemNetworkTokenWrapped  # noqa
+from .golemnetworktoken import GolemNetworkToken  # noqa
+from .golemnetworktokenbatching import GolemNetworkTokenBatching  # noqa
 from .gntdeposit import GNTDeposit  # noqa
 from .gntpaymentchannels import GNTPaymentChannels  # noqa

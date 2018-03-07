@@ -3,7 +3,7 @@ import unittest.mock as mock
 import unittest
 
 from golem_sci.client import FilterNotFoundException
-from golem_sci.contracts import GolemNetworkTokenWrapped
+from golem_sci.contracts import GolemNetworkTokenBatching
 from golem_sci.implementation import SCIImplementation
 
 
@@ -32,7 +32,7 @@ class SCIImplementationTest(unittest.TestCase):
                 self.geth_client,
                 get_eth_address(),
                 monitor=False)
-        self.gntw = self.contracts[GolemNetworkTokenWrapped.ADDRESS]
+        self.gntb = self.contracts[GolemNetworkTokenBatching.ADDRESS]
 
     def test_eth_address(self):
         assert get_eth_address() == self.sci.get_eth_address()
@@ -48,7 +48,7 @@ class SCIImplementationTest(unittest.TestCase):
         filter_id = '0x3'
         events = []
 
-        self.gntw.on.return_value = filter_id
+        self.gntb.on.return_value = filter_id
         self.geth_client.get_filter_logs.return_value = []
         self.sci.subscribe_to_incoming_batch_transfers(
             receiver_address,
@@ -57,7 +57,7 @@ class SCIImplementationTest(unittest.TestCase):
             required_confs,
         )
 
-        self.gntw.on.assert_called_once_with(
+        self.gntb.on.assert_called_once_with(
             'BatchTransfer',
             from_block,
             'latest',
@@ -104,13 +104,13 @@ class SCIImplementationTest(unittest.TestCase):
         self.geth_client.get_filter_changes.reset_mock()
         self.geth_client.get_filter_changes.side_effect = \
             FilterNotFoundException()
-        self.gntw.on.reset_mock()
-        self.gntw.on.return_value = new_filter_id
+        self.gntb.on.reset_mock()
+        self.gntb.on.return_value = new_filter_id
         self.geth_client.get_filter_logs.reset_mock()
 
         self.sci._monitor_blockchain_single()
 
-        self.gntw.on.assert_called_once_with(
+        self.gntb.on.assert_called_once_with(
             'BatchTransfer',
             block_number + required_confs,
             'latest',
@@ -139,7 +139,7 @@ class SCIImplementationTest(unittest.TestCase):
             ],
             'data': data,
         }]
-        self.gntw.on.return_value = filter_id
+        self.gntb.on.return_value = filter_id
 
         events = self.sci.get_batch_tranfers(
             sender_address,

@@ -47,9 +47,9 @@ class SmartContractsInterface(object, metaclass=abc.ABCMeta):
         pass
 
     @abc.abstractmethod
-    def get_gntw_balance(self, address: str) -> Optional[int]:
+    def get_gntb_balance(self, address: str) -> Optional[int]:
         """
-        Returns GNTW balance in wei or None is case of issues.
+        Returns GNTB balance in wei or None is case of issues.
         """
         pass
 
@@ -104,7 +104,16 @@ class SmartContractsInterface(object, metaclass=abc.ABCMeta):
 
     # Transaction
     @abc.abstractmethod
-    def transfer_gntw(self, to_address: str, amount: int) -> str:
+    def transfer_gntb(self, to_address: str, amount: int) -> str:
+        pass
+
+    # Transaction
+    @abc.abstractmethod
+    def transfer_gntb_and_call(
+            self,
+            to_address: str,
+            amount: int,
+            data: bytes) -> str:
         pass
 
     # Transaction
@@ -113,16 +122,16 @@ class SmartContractsInterface(object, metaclass=abc.ABCMeta):
         pass
 
     ########################
-    # GNT-GNTW conversions #
+    # GNT-GNTB conversions #
     ########################
 
     # Transaction
     @abc.abstractmethod
-    def create_personal_deposit_slot(self) -> str:
+    def open_gate(self) -> str:
         pass
 
     @abc.abstractmethod
-    def get_personal_deposit_slot(self) -> str:
+    def get_gate_address(self) -> str:
         """
         Returns Ethereum address
         """
@@ -130,15 +139,15 @@ class SmartContractsInterface(object, metaclass=abc.ABCMeta):
 
     # Transaction
     @abc.abstractmethod
-    def process_personal_deposit_slot(self) -> str:
+    def transfer_from_gate(self) -> str:
         """
-        Final step which convert the value of the deposit to GNTW
+        Final step which convert the value of the gate to GNTB
         """
         pass
 
     # Transaction
     @abc.abstractmethod
-    def convert_gntw_to_gnt(self, amount: int) -> str:
+    def convert_gntb_to_gnt(self, amount: int) -> str:
         pass
 
     ############################
