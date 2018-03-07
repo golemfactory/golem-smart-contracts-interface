@@ -71,18 +71,18 @@ class IntegrationTest(unittest.TestCase):
             'to': contracts.GolemNetworkToken.ADDRESS,
         }).transfer(contracts.Faucet.ADDRESS, total_gnt)
 
-    def _deploy_gntw(self, web3):
+    def _deploy_gntb(self, web3):
         addr = self.eth_tester.get_accounts()[0]
-        gntw = web3.eth.contract(
+        gntb = web3.eth.contract(
             bytecode=contracts.GolemNetworkTokenBatching.BIN,
             abi=json.loads(contracts.GolemNetworkTokenBatching.ABI),
         )
-        gntw_tx = gntw.deploy(
+        gntb_tx = gntb.deploy(
             transaction={'from': addr},
             args=[decode_hex(contracts.GolemNetworkToken.ADDRESS)],
         )
         contracts.GolemNetworkTokenBatching.ADDRESS = \
-            web3.eth.getTransactionReceipt(gntw_tx)['contractAddress']
+            web3.eth.getTransactionReceipt(gntb_tx)['contractAddress']
 
     def _deploy_concents(self, web3):
         self.gntdeposit_withdrawal_delay = 7 * 24 * 60 * 60
@@ -142,7 +142,7 @@ class IntegrationTest(unittest.TestCase):
         web3 = Web3(EthereumTesterProvider(self.eth_tester))
 
         self._deploy_gnt(web3)
-        self._deploy_gntw(web3)
+        self._deploy_gntb(web3)
         self._deploy_concents(web3)
 
         from_addr = self.eth_tester.get_accounts()[0]
@@ -161,13 +161,13 @@ class IntegrationTest(unittest.TestCase):
 
         self.eth_tester.add_account(encode_hex(privkey))
 
-    def _create_gntw(self):
+    def _create_gntb(self):
         self.sci.request_gnt_from_faucet()
         self.sci.open_gate()
         pda = self.sci.get_gate_address()
         self.sci.transfer_gnt(pda, 1000 * denoms.ether)
         self.sci.transfer_from_gate()
-        assert self.sci.get_gntw_balance(self.address) == 1000 * denoms.ether
+        assert self.sci.get_gntb_balance(self.address) == 1000 * denoms.ether
 
     def _time_travel(self, period: int):
         current_ts = self.eth_tester.get_block_by_number('pending')['timestamp']
@@ -179,14 +179,14 @@ class IntegrationTest(unittest.TestCase):
         assert self.sci.get_gnt_balance(self.address) == 1000 * denoms.ether
 
     def test_gntdeposit_lock(self):
-        self._create_gntw()
+        self._create_gntb()
         value = 1000 * denoms.ether
         assert self.sci.get_deposit_value(self.address) == 0
         assert self.sci.get_deposit_locked_until(self.address) == 0
 
         self.sci.deposit_payment(value)
         assert self.sci.get_deposit_value(self.address) == value
-        assert self.sci.get_gntw_balance(self.address) == 0
+        assert self.sci.get_gntb_balance(self.address) == 0
 
         # can't withdraw if unlocked
         with self.assertRaises(TransactionFailed):
@@ -205,10 +205,10 @@ class IntegrationTest(unittest.TestCase):
         self._time_travel(100)
         self.sci.withdraw_deposit()
         assert self.sci.get_deposit_value(self.address) == 0
-        assert self.sci.get_gntw_balance(self.address) == value
+        assert self.sci.get_gntb_balance(self.address) == value
 
     def test_forced_payment(self):
-        self._create_gntw()
+        self._create_gntb()
         requestor = self.address
         provider = '0x' + 40 * 'b'
         value = 123
@@ -218,7 +218,7 @@ class IntegrationTest(unittest.TestCase):
         from_block = self.sci.get_block_number()
         self.sci.force_payment(requestor, provider, value, closure_time)
         assert self.sci.get_deposit_value(requestor) == 0
-        assert self.sci.get_gntw_balance(provider) == value
+        assert self.sci.get_gntb_balance(provider) == value
         self.eth_tester.mine_block()
         to_block = self.sci.get_block_number()
         forced_payments = self.sci.get_forced_payments(
@@ -234,9 +234,9 @@ class IntegrationTest(unittest.TestCase):
         assert forced_payments[0].amount == value
         assert forced_payments[0].closure_time == closure_time
 
-    def test_gntw_transfer(self):
-        self._create_gntw()
+    def test_gntb_transfer(self):
+        self._create_gntb()
         recipient = '0x' + 40 * 'a'
         amount = 123
-        self.sci.transfer_gntw(recipient, amount)
-        assert self.sci.get_gntw_balance(recipient) == amount
+        self.sci.transfer_gntb(recipient, amount)
+        assert self.sci.get_gntb_balance(recipient) == amount

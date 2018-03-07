@@ -47,9 +47,9 @@ class SmartContractsInterface(object, metaclass=abc.ABCMeta):
         pass
 
     @abc.abstractmethod
-    def get_gntw_balance(self, address: str) -> Optional[int]:
+    def get_gntb_balance(self, address: str) -> Optional[int]:
         """
-        Returns GNTW balance in wei or None is case of issues.
+        Returns GNTB balance in wei or None is case of issues.
         """
         pass
 
@@ -104,12 +104,12 @@ class SmartContractsInterface(object, metaclass=abc.ABCMeta):
 
     # Transaction
     @abc.abstractmethod
-    def transfer_gntw(self, to_address: str, amount: int) -> str:
+    def transfer_gntb(self, to_address: str, amount: int) -> str:
         pass
 
     # Transaction
     @abc.abstractmethod
-    def transfer_gntw_and_call(
+    def transfer_gntb_and_call(
             self,
             to_address: str,
             amount: int,
@@ -122,7 +122,7 @@ class SmartContractsInterface(object, metaclass=abc.ABCMeta):
         pass
 
     ########################
-    # GNT-GNTW conversions #
+    # GNT-GNTB conversions #
     ########################
 
     # Transaction
@@ -141,13 +141,13 @@ class SmartContractsInterface(object, metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def transfer_from_gate(self) -> str:
         """
-        Final step which convert the value of the gate to GNTW
+        Final step which convert the value of the gate to GNTB
         """
         pass
 
     # Transaction
     @abc.abstractmethod
-    def convert_gntw_to_gnt(self, amount: int) -> str:
+    def convert_gntb_to_gnt(self, amount: int) -> str:
         pass
 
     ############################
