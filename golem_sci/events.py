@@ -39,7 +39,6 @@ class ForcedSubtaskPaymentEvent:
 
 class ForcedPaymentEvent:
     def __init__(self, raw_log: Dict[str, Any]):
-        print(raw_log)
         self.tx_hash: str = raw_log['transactionHash']
         self.requestor: str = '0x' + raw_log['topics'][1][26:]
         self.provider: str = '0x' + raw_log['topics'][2][26:]

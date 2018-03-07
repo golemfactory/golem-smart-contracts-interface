@@ -1,6 +1,5 @@
 import json
-import unittest.mock as mock
-import unittest
+from unittest import mock, TestCase
 import os
 
 from golem_sci.factory import new_sci
@@ -19,8 +18,15 @@ web3.providers.eth_tester.main.API_ENDPOINTS['eth']['sendRawTransaction'] = \
     web3.providers.eth_tester.main.call_eth_tester('send_raw_transaction')
 
 
-class IntegrationTest(unittest.TestCase):
-    def _deploy_gnt(self, web3):
+def mock_payment(payee: str, amount: int):
+    payment = mock.Mock()
+    payment.payee = decode_hex(payee)
+    payment.value = amount
+    return payment
+
+
+class IntegrationTest(TestCase):
+    def _deploy_gnt(self, web3, golem_address: str):
         addr = self.eth_tester.get_accounts()[0]
 
         block_number = web3.eth.blockNumber
@@ -31,8 +37,8 @@ class IntegrationTest(unittest.TestCase):
         gnt_tx = gnt.deploy(
             transaction={'from': addr},
             args=[
-                decode_hex(addr),
-                decode_hex(addr),
+                decode_hex(golem_address),
+                decode_hex(golem_address),
                 block_number + 2,
                 block_number + 3,
             ],
@@ -84,7 +90,7 @@ class IntegrationTest(unittest.TestCase):
         contracts.GolemNetworkTokenBatching.ADDRESS = \
             web3.eth.getTransactionReceipt(gntb_tx)['contractAddress']
 
-    def _deploy_concents(self, web3):
+    def _deploy_concents(self, web3, concent_address: str):
         self.gntdeposit_withdrawal_delay = 7 * 24 * 60 * 60
         addr = self.eth_tester.get_accounts()[0]
         gnt_deposit = web3.eth.contract(
@@ -95,8 +101,8 @@ class IntegrationTest(unittest.TestCase):
             transaction={'from': addr},
             args=[
                 decode_hex(contracts.GolemNetworkTokenBatching.ADDRESS),
-                decode_hex(self.address),  # oracle
-                decode_hex(self.address),  # coldwallet
+                decode_hex(concent_address),  # oracle
+                decode_hex(concent_address),  # coldwallet
                 self.gntdeposit_withdrawal_delay,
             ],
         )
@@ -135,93 +141,123 @@ class IntegrationTest(unittest.TestCase):
             return res
         self.eth_tester.get_all_filter_logs = get_all_filter_logs_patch
 
-    def setUp(self):
-        privkey = os.urandom(32)
-        self.address = encode_hex(privtoaddr(privkey))
-        self._create_eth_tester()
-        web3 = Web3(EthereumTesterProvider(self.eth_tester))
-
-        self._deploy_gnt(web3)
-        self._deploy_gntb(web3)
-        self._deploy_concents(web3)
-
-        from_addr = self.eth_tester.get_accounts()[0]
+    def _fund_account(self, from_idx: int, address: str) -> None:
+        from_addr = self.eth_tester.get_accounts()[from_idx]
         self.eth_tester.send_transaction({
             'from': from_addr,
-            'to': self.address,
+            'to': address,
             'value': self.eth_tester.get_balance(from_addr) - 21000,
             'gas': 21000,
         })
 
-        def sign_tx(tx):
-            tx.sign(privkey)
+    def setUp(self):
+        golem_privkey = os.urandom(32)
+        concent_privkey = os.urandom(32)
+        user_privkey = os.urandom(32)
+        golem_address = encode_hex(privtoaddr(golem_privkey))
+        concent_address = encode_hex(privtoaddr(concent_privkey))
+        user_address = encode_hex(privtoaddr(user_privkey))
+
+        self._create_eth_tester()
+        web3 = Web3(EthereumTesterProvider(self.eth_tester))
+
+        self._deploy_gnt(web3, golem_address)
+        self._deploy_gntb(web3)
+        self._deploy_concents(web3, concent_address)
+
+        self._fund_account(1, concent_address)
+        self._fund_account(2, user_address)
+
         with mock.patch('golem_sci.factory._ensure_geth_version'):
             with mock.patch('golem_sci.factory._ensure_genesis'):
-                self.sci = new_sci(web3, self.address, sign_tx)
+                def sign_tx_user(tx):
+                    tx.sign(user_privkey)
+                self.user_sci = new_sci(web3, user_address, sign_tx_user)
 
-        self.eth_tester.add_account(encode_hex(privkey))
+                def sign_tx_concent(tx):
+                    tx.sign(concent_privkey)
+                self.concent_sci = new_sci(
+                    web3,
+                    concent_address,
+                    sign_tx_concent,
+                )
+
+        self.eth_tester.add_account(encode_hex(concent_privkey))
+        self.eth_tester.add_account(encode_hex(user_privkey))
 
     def _create_gntb(self):
-        self.sci.request_gnt_from_faucet()
-        self.sci.open_gate()
-        pda = self.sci.get_gate_address()
-        self.sci.transfer_gnt(pda, 1000 * denoms.ether)
-        self.sci.transfer_from_gate()
-        assert self.sci.get_gntb_balance(self.address) == 1000 * denoms.ether
+        self.user_sci.request_gnt_from_faucet()
+        self.user_sci.open_gate()
+        pda = self.user_sci.get_gate_address()
+        self.user_sci.transfer_gnt(pda, 1000 * denoms.ether)
+        self.user_sci.transfer_from_gate()
+        assert self.user_sci.get_gntb_balance(self.user_sci.get_eth_address()) \
+            == 1000 * denoms.ether
 
     def _time_travel(self, period: int):
         current_ts = self.eth_tester.get_block_by_number('pending')['timestamp']
         self.eth_tester.time_travel(current_ts + period)
 
     def test_faucet(self):
-        assert self.sci.get_gnt_balance(self.address) == 0
-        self.sci.request_gnt_from_faucet()
-        assert self.sci.get_gnt_balance(self.address) == 1000 * denoms.ether
+        user_addr = self.user_sci.get_eth_address()
+        assert self.user_sci.get_gnt_balance(user_addr) == 0
+        self.user_sci.request_gnt_from_faucet()
+        assert self.user_sci.get_gnt_balance(user_addr) == 1000 * denoms.ether
 
     def test_gntdeposit_lock(self):
         self._create_gntb()
         value = 1000 * denoms.ether
-        assert self.sci.get_deposit_value(self.address) == 0
-        assert self.sci.get_deposit_locked_until(self.address) == 0
+        user_addr = self.user_sci.get_eth_address()
+        assert self.user_sci.get_deposit_value(user_addr) == 0
+        assert self.user_sci.get_deposit_locked_until(user_addr) == 0
 
-        self.sci.deposit_payment(value)
-        assert self.sci.get_deposit_value(self.address) == value
-        assert self.sci.get_gntb_balance(self.address) == 0
+        self.user_sci.deposit_payment(value)
+        assert self.user_sci.get_deposit_value(user_addr) == value
+        assert self.user_sci.get_gntb_balance(user_addr) == 0
 
         # can't withdraw if unlocked
         with self.assertRaises(TransactionFailed):
-            self.sci.withdraw_deposit()
+            self.user_sci.withdraw_deposit()
 
         # can't withdraw if just unlocked
-        self.sci.unlock_deposit()
+        self.user_sci.unlock_deposit()
         with self.assertRaises(TransactionFailed):
-            self.sci.withdraw_deposit()
+            self.user_sci.withdraw_deposit()
 
         # can't withdraw if still time locked
         self._time_travel(self.gntdeposit_withdrawal_delay - 100)
         with self.assertRaises(TransactionFailed):
-            self.sci.withdraw_deposit()
+            self.user_sci.withdraw_deposit()
 
         self._time_travel(100)
-        self.sci.withdraw_deposit()
-        assert self.sci.get_deposit_value(self.address) == 0
-        assert self.sci.get_gntb_balance(self.address) == value
+        self.user_sci.withdraw_deposit()
+        assert self.user_sci.get_deposit_value(user_addr) == 0
+        assert self.user_sci.get_gntb_balance(user_addr) == value
 
     def test_forced_payment(self):
         self._create_gntb()
-        requestor = self.address
+        requestor = self.user_sci.get_eth_address()
         provider = '0x' + 40 * 'b'
         value = 123
         closure_time = 1337
-        self.sci.deposit_payment(value)
+        self.user_sci.deposit_payment(value)
 
-        from_block = self.sci.get_block_number()
-        self.sci.force_payment(requestor, provider, value, closure_time)
-        assert self.sci.get_deposit_value(requestor) == 0
-        assert self.sci.get_gntb_balance(provider) == value
+        from_block = self.user_sci.get_block_number()
+        # user can't force a payment
+        with self.assertRaises(TransactionFailed):
+            self.user_sci.force_payment(
+                requestor,
+                provider,
+                value,
+                closure_time,
+            )
+        # only concent can
+        self.concent_sci.force_payment(requestor, provider, value, closure_time)
+        assert self.user_sci.get_deposit_value(requestor) == 0
+        assert self.user_sci.get_gntb_balance(provider) == value
         self.eth_tester.mine_block()
-        to_block = self.sci.get_block_number()
-        forced_payments = self.sci.get_forced_payments(
+        to_block = self.user_sci.get_block_number()
+        forced_payments = self.user_sci.get_forced_payments(
             requestor,
             provider,
             from_block,
@@ -238,5 +274,63 @@ class IntegrationTest(unittest.TestCase):
         self._create_gntb()
         recipient = '0x' + 40 * 'a'
         amount = 123
-        self.sci.transfer_gntb(recipient, amount)
-        assert self.sci.get_gntb_balance(recipient) == amount
+        self.user_sci.transfer_gntb(recipient, amount)
+        assert self.user_sci.get_gntb_balance(recipient) == amount
+
+    def test_withdraw_gntb(self):
+        self._create_gntb()
+        amount = 123
+        user_addr = self.user_sci.get_eth_address()
+        self.user_sci.convert_gntb_to_gnt(amount)
+        assert self.user_sci.get_gnt_balance(user_addr) == amount
+        assert self.user_sci.get_gntb_balance(user_addr) == \
+            1000 * denoms.ether - amount
+
+    def test_batch_transfer(self):
+        self._create_gntb()
+        payee1 = '0x' + 40 * 'a'
+        payee2 = '0x' + 40 * 'b'
+        amount1 = 123
+        amount21 = 234
+        amount22 = 345
+        closure_time = 555
+
+        payment1 = mock_payment(payee1, amount1)
+        payment21 = mock_payment(payee2, amount21)
+        payment22 = mock_payment(payee2, amount22)
+
+        from_block = self.user_sci.get_block_number()
+        tx_hash = self.user_sci.batch_transfer(
+            [payment1, payment21, payment22],
+            closure_time,
+        )
+        self.eth_tester.mine_block()
+        to_block = self.user_sci.get_block_number()
+
+        batch_transfers1 = self.user_sci.get_batch_transfers(
+            self.user_sci.get_eth_address(),
+            payee1,
+            from_block,
+            to_block,
+        )
+        assert self.user_sci.get_gntb_balance(payee1) == amount1
+        assert len(batch_transfers1) == 1
+        assert batch_transfers1[0].tx_hash == tx_hash
+        assert batch_transfers1[0].amount == amount1
+        assert batch_transfers1[0].sender == self.user_sci.get_eth_address()
+        assert batch_transfers1[0].receiver == payee1
+        assert batch_transfers1[0].closure_time == closure_time
+
+        batch_transfers2 = self.user_sci.get_batch_transfers(
+            self.user_sci.get_eth_address(),
+            payee2,
+            from_block,
+            to_block,
+        )
+        assert self.user_sci.get_gntb_balance(payee2) == amount21 + amount22
+        assert len(batch_transfers2) == 1
+        assert batch_transfers2[0].tx_hash == tx_hash
+        assert batch_transfers2[0].amount == amount21 + amount22
+        assert batch_transfers2[0].sender == self.user_sci.get_eth_address()
+        assert batch_transfers2[0].receiver == payee2
+        assert batch_transfers2[0].closure_time == closure_time

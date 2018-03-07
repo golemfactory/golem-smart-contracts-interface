@@ -63,8 +63,9 @@ class SCIImplementation(SmartContractsInterface):
     GAS_PRICE = 20 * 10 ** 9
 
     GAS_TRANSFER = 90000
-    GAS_CREATE_PERSONAL_DEPOSIT = 320000
-    GAS_PROCESS_DEPOSIT = 110000
+    GAS_WITHDRAW = 75000
+    GAS_OPEN_GATE = 320000
+    GAS_TRANSFER_FROM_GATE = 110000
     # Total gas for a batchTransfer is BASE + len(payments) * PER_PAYMENT
     GAS_PER_PAYMENT = 30000
     # tx: 21000, balance substract: 5000, arithmetics < 800
@@ -149,7 +150,7 @@ class SCIImplementation(SmartContractsInterface):
             gas,
         )
 
-    def get_batch_tranfers(
+    def get_batch_transfers(
             self,
             payer_address: str,
             payee_address: str,
@@ -381,7 +382,7 @@ class SCIImplementation(SmartContractsInterface):
             self._gntb,
             'openGate',
             [],
-            self.GAS_CREATE_PERSONAL_DEPOSIT,
+            self.GAS_OPEN_GATE,
         )
 
     def get_gate_address(self) -> str:
@@ -393,11 +394,16 @@ class SCIImplementation(SmartContractsInterface):
             self._gntb,
             'transferFromGate',
             [],
-            self.GAS_PROCESS_DEPOSIT,
+            self.GAS_TRANSFER_FROM_GATE,
         )
 
     def convert_gntb_to_gnt(self, amount: int) -> str:
-        raise Exception("Not implemented yet")
+        return self._send_transaction(
+            self._gntb,
+            'withdraw',
+            [amount],
+            self.GAS_WITHDRAW,
+        )
 
     ############################
     # Concent specific methods #
