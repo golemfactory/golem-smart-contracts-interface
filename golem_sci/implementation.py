@@ -86,6 +86,9 @@ class SCIImplementation(SmartContractsInterface):
         Performs all blockchain operations using the address as the caller.
         Uses tx_sign to sign outgoing transaction, tx_sign can be None in which
         case one may only perform read only operations.
+        Straightforward implementation of tx_sign having the private key:
+        def sign_tx(tx) -> None:
+            tx.sign(private_key)
         """
         self._geth_client = geth_client
         self._address = address
