@@ -121,7 +121,7 @@ class SCIImplementationTest(unittest.TestCase):
         )
         assert 0 == len(events)
 
-    def test_get_batch_tranfers(self):
+    def test_get_batch_transfers(self):
         receiver_address = '0x' + 'f' * 40
         sender_address = '0x' + 'e' * 40
         tx_hash = '0x' + 'a' * 40
@@ -141,7 +141,7 @@ class SCIImplementationTest(unittest.TestCase):
         }]
         self.gntb.on.return_value = filter_id
 
-        events = self.sci.get_batch_tranfers(
+        events = self.sci.get_batch_transfers(
             sender_address,
             receiver_address,
             from_block,
