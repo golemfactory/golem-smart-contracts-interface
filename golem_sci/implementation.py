@@ -80,6 +80,7 @@ class SCIImplementation(SmartContractsInterface):
             self,
             geth_client: Client,
             address: str,
+            contract_data_provider,
             tx_sign=None,
             monitor=True):
         """
@@ -94,12 +95,12 @@ class SCIImplementation(SmartContractsInterface):
         self._address = address
         self._tx_sign = tx_sign
 
-        def make_contract_wrapper(contract_class):
+        def make_contract_wrapper(contract):
             return ContractWrapper(
                 address,
                 self._geth_client.contract(
-                    contract_class.ADDRESS,
-                    contract_class.ABI,
+                    contract_data_provider.get_address(contract),
+                    contract_data_provider.get_abi(contract),
                 ),
             )
         self._gntb = make_contract_wrapper(contracts.GolemNetworkTokenBatching)

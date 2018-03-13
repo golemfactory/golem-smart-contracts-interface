@@ -2,8 +2,8 @@ import json
 from unittest import mock, TestCase
 import os
 
+from golem_sci import contracts
 from golem_sci.factory import new_sci
-import golem_sci.contracts as contracts
 
 from web3 import Web3
 from web3.providers.eth_tester import EthereumTesterProvider
@@ -25,14 +25,26 @@ def mock_payment(payee: str, amount: int):
     return payment
 
 
+class MockProvider:
+    def __init__(self) -> None:
+        self.data = {}
+
+    def get_address(self, contract: str) -> str:
+        return self.data[contract]['address']
+
+    def get_abi(self, contract: str) -> str:
+        return self.data[contract]['abi']
+
+
 class IntegrationTest(TestCase):
     def _deploy_gnt(self, web3, golem_address: str):
         addr = self.eth_tester.get_accounts()[0]
 
         block_number = web3.eth.blockNumber
+        from golem_sci.contracts.data.rinkeby import golemnetworktoken
         gnt = web3.eth.contract(
-            bytecode=contracts.GolemNetworkToken.BIN,
-            abi=json.loads(contracts.GolemNetworkToken.ABI),
+            bytecode=golemnetworktoken.BIN,
+            abi=json.loads(golemnetworktoken.ABI),
         )
         gnt_tx = gnt.deploy(
             transaction={'from': addr},
@@ -43,71 +55,99 @@ class IntegrationTest(TestCase):
                 block_number + 3,
             ],
         )
-        contracts.GolemNetworkToken.ADDRESS = \
+        gnt_address = \
             web3.eth.getTransactionReceipt(gnt_tx)['contractAddress']
+        self.provider.data[contracts.GolemNetworkToken] = {
+            'address': gnt_address,
+            'abi': golemnetworktoken.ABI,
+        }
         gnt_funder = self.eth_tester.get_accounts()[1]
         gnt.transact({
             'from': gnt_funder,
             'value': 5 * 10 ** 16,
-            'to': contracts.GolemNetworkToken.ADDRESS,
+            'to': gnt_address,
         }).create()
         total_gnt = gnt.call({
             'from': gnt_funder,
-            'to': contracts.GolemNetworkToken.ADDRESS,
+            'to': gnt_address,
         }).totalSupply()
         self.eth_tester.mine_blocks(2)
         gnt.transact({
             'from': gnt_funder,
-            'to': contracts.GolemNetworkToken.ADDRESS,
+            'to': gnt_address,
         }).finalize()
 
-        faucet = web3.eth.contract(
-            bytecode=contracts.Faucet.BIN,
-            abi=json.loads(contracts.Faucet.ABI),
+        from golem_sci.contracts.data.rinkeby import faucet
+        faucet_contract = web3.eth.contract(
+            bytecode=faucet.BIN,
+            abi=json.loads(faucet.ABI),
         )
-        faucet_tx = faucet.deploy(
+        faucet_tx = faucet_contract.deploy(
             transaction={'from': addr},
-            args=[decode_hex(contracts.GolemNetworkToken.ADDRESS)],
+            args=[decode_hex(gnt_address)],
         )
-        contracts.Faucet.ADDRESS = \
+        faucet_address = \
             web3.eth.getTransactionReceipt(faucet_tx)['contractAddress']
+        self.provider.data[contracts.Faucet] = {
+            'address': faucet_address,
+            'abi': faucet.ABI,
+        }
 
         gnt.transact({
             'from': gnt_funder,
-            'to': contracts.GolemNetworkToken.ADDRESS,
-        }).transfer(contracts.Faucet.ADDRESS, total_gnt)
+            'to': gnt_address,
+        }).transfer(faucet_address, total_gnt)
 
     def _deploy_gntb(self, web3):
         addr = self.eth_tester.get_accounts()[0]
+        from golem_sci.contracts.data.rinkeby import golemnetworktokenbatching
         gntb = web3.eth.contract(
-            bytecode=contracts.GolemNetworkTokenBatching.BIN,
-            abi=json.loads(contracts.GolemNetworkTokenBatching.ABI),
+            bytecode=golemnetworktokenbatching.BIN,
+            abi=json.loads(golemnetworktokenbatching.ABI),
         )
+        gnt_address = self.provider.get_address(contracts.GolemNetworkToken)
         gntb_tx = gntb.deploy(
             transaction={'from': addr},
-            args=[decode_hex(contracts.GolemNetworkToken.ADDRESS)],
+            args=[decode_hex(gnt_address)],
         )
-        contracts.GolemNetworkTokenBatching.ADDRESS = \
+        gntb_address = \
             web3.eth.getTransactionReceipt(gntb_tx)['contractAddress']
+        self.provider.data[contracts.GolemNetworkTokenBatching] = {
+            'address': gntb_address,
+            'abi': golemnetworktokenbatching.ABI,
+        }
 
     def _deploy_concents(self, web3, concent_address: str):
         self.gntdeposit_withdrawal_delay = 7 * 24 * 60 * 60
         addr = self.eth_tester.get_accounts()[0]
+        from golem_sci.contracts.data.rinkeby import gntdeposit
         gnt_deposit = web3.eth.contract(
-            bytecode=contracts.GNTDeposit.BIN,
-            abi=json.loads(contracts.GNTDeposit.ABI),
+            bytecode=gntdeposit.BIN,
+            abi=json.loads(gntdeposit.ABI),
         )
+        gntb_address = \
+            self.provider.get_address(contracts.GolemNetworkTokenBatching)
         gnt_deposit_tx = gnt_deposit.deploy(
             transaction={'from': addr},
             args=[
-                decode_hex(contracts.GolemNetworkTokenBatching.ADDRESS),
+                decode_hex(gntb_address),
                 decode_hex(concent_address),  # oracle
                 decode_hex(concent_address),  # coldwallet
                 self.gntdeposit_withdrawal_delay,
             ],
         )
-        contracts.GNTDeposit.ADDRESS = \
+        gntdeposit_address = \
             web3.eth.getTransactionReceipt(gnt_deposit_tx)['contractAddress']
+        self.provider.data[contracts.GNTDeposit] = {
+            'address': gntdeposit_address,
+            'abi': gntdeposit.ABI,
+        }
+
+        # TODO Test GNTPaymentChannels
+        self.provider.data[contracts.GNTPaymentChannels] = {
+            'address': '0x' + 40 * '3',
+            'abi': '[]',
+        }
 
     def _create_eth_tester(self):
         self.eth_tester = EthereumTester()
@@ -158,6 +198,8 @@ class IntegrationTest(TestCase):
         concent_address = encode_hex(privtoaddr(concent_privkey))
         user_address = encode_hex(privtoaddr(user_privkey))
 
+        self.provider = MockProvider()
+
         self._create_eth_tester()
         web3 = Web3(EthereumTesterProvider(self.eth_tester))
 
@@ -168,19 +210,22 @@ class IntegrationTest(TestCase):
         self._fund_account(1, concent_address)
         self._fund_account(2, user_address)
 
-        with mock.patch('golem_sci.factory._ensure_geth_version'):
-            with mock.patch('golem_sci.factory._ensure_genesis'):
-                def sign_tx_user(tx):
-                    tx.sign(user_privkey)
-                self.user_sci = new_sci(web3, user_address, sign_tx_user)
+        with mock.patch('golem_sci.factory._ensure_geth_version'), \
+                mock.patch('golem_sci.factory._ensure_genesis'), \
+                mock.patch('golem_sci.factory.ContractDataProvider') as cdp:
+            cdp.return_value = self.provider
 
-                def sign_tx_concent(tx):
-                    tx.sign(concent_privkey)
-                self.concent_sci = new_sci(
-                    web3,
-                    concent_address,
-                    sign_tx_concent,
-                )
+            def sign_tx_user(tx):
+                tx.sign(user_privkey)
+            self.user_sci = new_sci(web3, user_address, sign_tx_user)
+
+            def sign_tx_concent(tx):
+                tx.sign(concent_privkey)
+            self.concent_sci = new_sci(
+                web3,
+                concent_address,
+                sign_tx_concent,
+            )
 
         self.eth_tester.add_account(encode_hex(concent_privkey))
         self.eth_tester.add_account(encode_hex(user_privkey))

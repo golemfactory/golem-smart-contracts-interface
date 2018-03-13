@@ -33,7 +33,12 @@ class SCIImplementationTest(unittest.TestCase):
         ensure_connection.assert_called_once_with(web3)
         ensure_geth_version.assert_called_once_with(web3)
         ensure_genesis.assert_called_once_with(web3, RINKEBY)
-        sci_init.assert_called_once_with(mock.ANY, eth_address, tx_sign)
+        sci_init.assert_called_once_with(
+            mock.ANY,
+            eth_address,
+            mock.ANY,
+            tx_sign,
+        )
 
     def test_ensure_genesis_valid(self):
         web3 = mock.Mock()

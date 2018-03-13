@@ -2,9 +2,12 @@ import json
 import unittest.mock as mock
 import unittest
 
+from golem_sci import chains
 from golem_sci.client import FilterNotFoundException
-from golem_sci.contracts import GolemNetworkTokenBatching
+from golem_sci.contracts.provider import ContractDataProvider
 from golem_sci.implementation import SCIImplementation
+from golem_sci.contracts.data.rinkeby.golemnetworktokenbatching import ADDRESS \
+    as GNTBAddress
 
 
 def get_eth_address():
@@ -31,8 +34,9 @@ class SCIImplementationTest(unittest.TestCase):
             self.sci = SCIImplementation(
                 self.geth_client,
                 get_eth_address(),
+                ContractDataProvider(chains.RINKEBY),
                 monitor=False)
-        self.gntb = self.contracts[GolemNetworkTokenBatching.ADDRESS]
+        self.gntb = self.contracts[GNTBAddress]
 
     def test_eth_address(self):
         assert get_eth_address() == self.sci.get_eth_address()

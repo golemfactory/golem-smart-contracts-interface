@@ -9,6 +9,7 @@ from web3 import Web3, IPCProvider, HTTPProvider
 
 from . import chains
 from .client import Client
+from .contracts.provider import ContractDataProvider
 from .implementation import SCIImplementation
 from .interface import SmartContractsInterface
 
@@ -52,7 +53,8 @@ def new_sci(
     _ensure_connection(web3)
     _ensure_geth_version(web3)
     _ensure_genesis(web3, chain)
-    return SCIImplementation(Client(web3), address, tx_sign)
+    provider = ContractDataProvider(chain)
+    return SCIImplementation(Client(web3), address, provider, tx_sign)
 
 
 def _ensure_genesis(web3: Web3, chain: str):
