@@ -95,14 +95,18 @@ class SCIImplementation(SmartContractsInterface):
         self._address = address
         self._tx_sign = tx_sign
 
-        def make_contract_wrapper(contract):
-            return ContractWrapper(
-                address,
-                self._geth_client.contract(
-                    contract_data_provider.get_address(contract),
-                    contract_data_provider.get_abi(contract),
-                ),
-            )
+        def make_contract_wrapper(contract: str):
+            try:
+                return ContractWrapper(
+                    address,
+                    self._geth_client.contract(
+                        contract_data_provider.get_address(contract),
+                        contract_data_provider.get_abi(contract),
+                    ),
+                )
+            except Exception:
+                logger.warning("Unable to use `%s` contract", contract)
+                return None
         self._gntb = make_contract_wrapper(contracts.GolemNetworkTokenBatching)
         self._gnt = make_contract_wrapper(contracts.GolemNetworkToken)
         self._faucet = make_contract_wrapper(contracts.Faucet)

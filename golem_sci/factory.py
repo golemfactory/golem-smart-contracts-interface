@@ -48,8 +48,6 @@ def new_sci(
         address: str,
         tx_sign: Callable[[Transaction], None]=None,
         chain: str=chains.RINKEBY) -> SmartContractsInterface:
-    if chain != chains.RINKEBY:
-        raise Exception('Unsupported chain {}'.format(chain))
     _ensure_connection(web3)
     _ensure_geth_version(web3)
     _ensure_genesis(web3, chain)

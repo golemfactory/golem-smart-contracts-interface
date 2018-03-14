@@ -1,10 +1,14 @@
 from golem_sci.contracts import data
+# Without these imports the `getattr` below don't work
 from .data.rinkeby import (
     golemnetworktoken,
     golemnetworktokenbatching,
     faucet,
     gntdeposit,
     gntpaymentchannels,
+)
+from .data.mainnet import (
+    golemnetworktoken,
 )
 
 

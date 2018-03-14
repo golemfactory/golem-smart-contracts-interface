@@ -256,3 +256,18 @@ class SCIImplementationTest(unittest.TestCase):
 
         self.sci._monitor_blockchain_single()
         self.geth_client.get_transaction.assert_not_called()
+
+    def test_missing_contracts(self):
+        provider = mock.Mock()
+        provider.get_address.return_value = Exception('missing')
+
+        # Constructor shouldn't throw when there are missing contracts' data
+        sci = SCIImplementation(
+            self.geth_client,
+            get_eth_address(),
+            provider,
+            monitor=False,
+        )
+        # But we can't use them then
+        with self.assertRaises(Exception):
+            sci.transfer_gnt('0xdead', 123)
