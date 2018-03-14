@@ -3,13 +3,15 @@ import logging
 
 from ethereum.utils import denoms
 
+from .interface import SmartContractsInterface
+
 logger = logging.getLogger("golem_sci.gnt_converter")
 
 
 class GNTConverter:
     REQUIRED_CONFS = 2
 
-    def __init__(self, sci):
+    def __init__(self, sci: SmartContractsInterface):
         self._sci = sci
         self._gate_address: Optional[str] = None
         self._ongoing_conversion: bool = False
