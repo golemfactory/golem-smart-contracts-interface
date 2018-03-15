@@ -1,17 +1,36 @@
+from datetime import datetime
 import json
+import pytz
 import unittest.mock as mock
 import unittest
+
+from eth_utils import decode_hex
+from freezegun import freeze_time
 
 from golem_sci import chains
 from golem_sci.client import FilterNotFoundException
 from golem_sci.contracts.provider import ContractDataProvider
-from golem_sci.implementation import SCIImplementation
+from golem_sci.implementation import (
+    SCIImplementation,
+    GasPriceAdjustableTransaction,
+)
 from golem_sci.contracts.data.rinkeby.golemnetworktokenbatching import ADDRESS \
     as GNTBAddress
 
 
 def get_eth_address():
     return '0xadd355' + '0' * 34
+
+
+def timestamp_to_datetime(ts):
+    return datetime.fromtimestamp(ts, pytz.utc)
+
+
+def mock_payment(payee: str, amount: int):
+    payment = mock.Mock()
+    payment.payee = decode_hex(payee)
+    payment.value = amount
+    return payment
 
 
 class SCIImplementationTest(unittest.TestCase):
@@ -24,6 +43,7 @@ class SCIImplementationTest(unittest.TestCase):
             ret.abi = json.loads(abi)
             ret.address = addr
             return ret
+        self.sign_tx = mock.Mock()
         self.geth_client.contract.side_effect = client_contract
         with mock.patch('golem_sci.implementation.ContractWrapper') as contract:
             def wrapper_factory(actor_address, c):
@@ -35,6 +55,7 @@ class SCIImplementationTest(unittest.TestCase):
                 self.geth_client,
                 get_eth_address(),
                 ContractDataProvider(chains.RINKEBY),
+                self.sign_tx,
                 monitor=False)
         self.gntb = self.contracts[GNTBAddress]
 
@@ -207,3 +228,78 @@ class SCIImplementationTest(unittest.TestCase):
         del receipt[:]
         self.sci._monitor_blockchain_single()
         assert not receipt
+
+    def test_adjustable_batch_transfer(self):
+        payee = '0x' + 40 * 'a'
+        amount = 123
+        closure_time = 1337
+        gwei = 10 ** 9
+        current_time = 0
+        step = GasPriceAdjustableTransaction.FREQUENCY
+        payment = mock_payment(payee, amount)
+        self.geth_client.get_transaction_receipt.return_value = None
+
+        # Start with minimum price
+        with freeze_time(timestamp_to_datetime(current_time)):
+            self.sci.batch_transfer(
+                [payment],
+                closure_time,
+                adjustable_gas_price=True,
+            )
+        self.geth_client.send.assert_called_once()
+        assert self.geth_client.send.call_args[0][0].gasprice == gwei
+        self.geth_client.reset_mock()
+
+        # Do nothing before FREQUENCY period has passed
+        current_time += step / 2
+        with freeze_time(timestamp_to_datetime(current_time)):
+            self.sci._monitor_blockchain_single()
+        self.geth_client.send.assert_not_called()
+
+        # Bump the price
+        current_time += step / 2
+        with freeze_time(timestamp_to_datetime(current_time)):
+            self.sci._monitor_blockchain_single()
+        self.geth_client.send.assert_called_once()
+        assert self.geth_client.send.call_args[0][0].gasprice == 2 * gwei
+        self.geth_client.reset_mock()
+
+        # Keep bumping
+        for i in range(2, 5):
+            current_time += step
+            with freeze_time(timestamp_to_datetime(current_time)):
+                self.sci._monitor_blockchain_single()
+            self.geth_client.send.assert_called_once()
+            assert self.geth_client.send.call_args[0][0].gasprice == 2**i * gwei
+            self.geth_client.reset_mock()
+
+        # Reach the hard cap
+        current_time += step
+        with freeze_time(timestamp_to_datetime(current_time)):
+            self.sci._monitor_blockchain_single()
+        self.geth_client.send.assert_called_once()
+        assert self.geth_client.send.call_args[0][0].gasprice == 20 * gwei
+        self.geth_client.reset_mock()
+
+        # Stop at the hard cap
+        current_time += step
+        with freeze_time(timestamp_to_datetime(current_time)):
+            self.sci._monitor_blockchain_single()
+        self.geth_client.send.assert_called_once()
+        assert self.geth_client.send.call_args[0][0].gasprice == 20 * gwei
+        self.geth_client.reset_mock()
+
+        # Finally mined
+        self.geth_client.get_transaction_receipt.return_value = mock.Mock()
+        current_time += step
+        with freeze_time(timestamp_to_datetime(current_time)):
+            self.sci._monitor_blockchain_single()
+        self.geth_client.send.assert_not_called()
+        self.geth_client.reset_mock()
+
+        # Should not be checked again
+        current_time += step
+        with freeze_time(timestamp_to_datetime(current_time)):
+            self.sci._monitor_blockchain_single()
+        self.geth_client.get_transaction_receipt.assert_not_called()
+        self.geth_client.send.assert_not_called()

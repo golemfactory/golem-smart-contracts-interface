@@ -1,7 +1,7 @@
 import logging
 import threading
 import time
-from typing import Callable, List, Optional
+from typing import Any, Callable, List, Optional
 
 from ethereum.utils import zpad, int_to_big_endian
 from ethereum.transactions import Transaction
@@ -56,6 +56,27 @@ class SubscriptionFilter:
         self.cb = cb
         self.required_confs = required_confs
         self.last_pulled_block = from_block
+
+
+class GasPriceAdjustableTransaction:
+    # 1 gwei
+    MIN_GAS_PRICE = 1 * 10 ** 9
+    # 20 gwei
+    HARD_CAP = 20 * 10 ** 9
+    # Bump the price every 5 minutes
+    FREQUENCY = 5 * 60
+
+    def __init__(self, tx: Transaction) -> None:
+        self.tx = tx
+        self.tx.gasprice = self.MIN_GAS_PRICE
+        self._next_bump_ts = time.time() + self.FREQUENCY
+
+    def try_resend(self) -> bool:
+        if time.time() >= self._next_bump_ts:
+            self.tx.gasprice = min(2 * self.tx.gasprice, self.HARD_CAP)
+            self._next_bump_ts = time.time() + self.FREQUENCY
+            return True
+        return False
 
 
 class SCIImplementation(SmartContractsInterface):
@@ -119,6 +140,9 @@ class SCIImplementation(SmartContractsInterface):
         self._awaiting_transactions_lock = threading.Lock()
         self._awaiting_transactions = []
 
+        self._adjustable_transactions_lock = threading.Lock()
+        self._adjustable_transactions: List[GasPriceAdjustableTransaction] = []
+
         self._monitor_thread = None
         self._monitor_stop = threading.Event()
 
@@ -144,15 +168,22 @@ class SCIImplementation(SmartContractsInterface):
     def get_gntb_balance(self, address: str) -> Optional[int]:
         return self._gntb.call().balanceOf(decode_hex(address))
 
-    def batch_transfer(self, payments, closure_time: int) -> str:
+    def batch_transfer(
+            self,
+            payments,
+            closure_time: int,
+            adjustable_gas_price=False) -> str:
         p = encode_payments(payments)
         gas = self.GAS_BATCH_PAYMENT_BASE + len(p) * self.GAS_PER_PAYMENT
-        return self._send_transaction(
+        tx = self._create_transaction(
             self._gntb,
             'batchTransfer',
             [p, closure_time],
             gas,
         )
+        if adjustable_gas_price:
+            self._add_gas_price_adjustable_transaction(tx)
+        return self._sign_and_send_transaction(tx)
 
     def get_batch_transfers(
             self,
@@ -258,21 +289,39 @@ class SCIImplementation(SmartContractsInterface):
     def stop(self) -> None:
         self._monitor_stop.set()
 
-    def _send_transaction(
+    def _create_transaction(
             self,
-            contract,
-            function_name,
-            args,
-            gas_limit):
-        tx = contract.create_transaction(
+            contract: ContractWrapper,
+            function_name: str,
+            args: List[Any],
+            gas_limit: int) -> Transaction:
+        return contract.create_transaction(
             function_name,
             args,
             self._geth_client.get_transaction_count(self.get_eth_address()),
             self.GAS_PRICE,
             gas_limit,
         )
+
+    def _sign_and_send_transaction(self, tx: Transaction) -> str:
         self._tx_sign(tx)
         return self._geth_client.send(tx)
+
+    def _add_gas_price_adjustable_transaction(
+            self,
+            tx: Transaction) -> None:
+        adjustable_tx = GasPriceAdjustableTransaction(tx)
+        with self._adjustable_transactions_lock:
+            self._adjustable_transactions.append(adjustable_tx)
+
+    def _send_transaction(
+            self,
+            contract: ContractWrapper,
+            function_name: str,
+            args: List[Any],
+            gas_limit: int):
+        tx = self._create_transaction(contract, function_name, args, gas_limit)
+        return self._sign_and_send_transaction(tx)
 
     def _monitor_blockchain(self):
         while not self._monitor_stop.is_set():
@@ -287,6 +336,7 @@ class SCIImplementation(SmartContractsInterface):
         block_number = self._geth_client.get_block_number()
         self._pull_changes_from_blockchain(block_number)
         self._process_awaiting_transactions(block_number)
+        self._adjust_transactions()
 
     def _on_filter_log(self, log, cb, required_confs: int) -> None:
         tx_hash = log['transactionHash']
@@ -376,6 +426,26 @@ class SCIImplementation(SmartContractsInterface):
 
         with self._awaiting_transactions_lock:
             self._awaiting_transactions.extend(remaining_awaiting_transactions)
+
+    def _adjust_transactions(self) -> None:
+        to_send = []
+        to_remove = set()
+        with self._adjustable_transactions_lock:
+            for adjustable_tx in self._adjustable_transactions:
+                if adjustable_tx.try_resend():
+                    tx = adjustable_tx.tx
+                    receipt = self._geth_client.get_transaction_receipt(tx.hash)
+                    if receipt is None:
+                        to_send.append(tx)
+                    else:
+                        to_remove.add(tx.hash)
+            self._adjustable_transactions = [
+                adj_tx for adj_tx in self._adjustable_transactions
+                if adj_tx.tx.hash not in to_remove
+            ]
+
+        for tx in to_send:
+            self._sign_and_send_transaction(tx)
 
     ########################
     # GNT-GNTB conversions #

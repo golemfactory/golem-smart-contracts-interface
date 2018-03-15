@@ -118,7 +118,11 @@ class SmartContractsInterface(object, metaclass=abc.ABCMeta):
 
     # Transaction
     @abc.abstractmethod
-    def batch_transfer(self, payments, closure_time: int) -> str:
+    def batch_transfer(
+            self,
+            payments,
+            closure_time: int,
+            adjustable_gas_price=False) -> str:
         pass
 
     ########################
