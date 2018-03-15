@@ -17,6 +17,7 @@ setup(
         'eth-keys==0.1.0b4',
         'eth-utils==0.7.4',
         'eth-tester==0.1.0b15',
+        'freezegun',
         'pytz',
         'web3==3.16.4',
     ],
