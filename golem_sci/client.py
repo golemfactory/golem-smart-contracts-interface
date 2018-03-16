@@ -100,6 +100,9 @@ class Client(object):
             logger.error("Ethereum RPC: {}".format(e))
             return None
 
+    def get_gas_price(self) -> int:
+        return self.web3.eth.gasPrice
+
     def call(self, _from=None, to=None, gas=90000, gas_price=3000, value=0,
              data=None, block=None):
         """

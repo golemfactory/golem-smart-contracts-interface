@@ -24,7 +24,9 @@ class SCIImplementationTest(unittest.TestCase):
             ret.abi = json.loads(abi)
             ret.address = addr
             return ret
+        self.sign_tx = mock.Mock()
         self.geth_client.contract.side_effect = client_contract
+        self.geth_client.get_gas_price.return_value = 10 ** 9
         with mock.patch('golem_sci.implementation.ContractWrapper') as contract:
             def wrapper_factory(actor_address, c):
                 res = mock.Mock()
@@ -35,11 +37,32 @@ class SCIImplementationTest(unittest.TestCase):
                 self.geth_client,
                 get_eth_address(),
                 ContractDataProvider(chains.RINKEBY),
+                self.sign_tx,
                 monitor=False)
         self.gntb = self.contracts[GNTBAddress]
 
     def test_eth_address(self):
         assert get_eth_address() == self.sci.get_eth_address()
+
+    def test_gas_price(self):
+        hard_cap = self.sci.GAS_PRICE
+
+        gas_price = hard_cap // 2
+        self.geth_client.get_gas_price.return_value = gas_price
+        self.geth_client.get_transaction_count.return_value = 0
+        self.sci._monitor_blockchain_single()
+        self.sci.transfer_eth(get_eth_address(), 123)
+        self.geth_client.send.assert_called()
+        assert self.geth_client.send.call_args[0][0].gasprice == gas_price
+        self.geth_client.reset_mock()
+
+        gas_price = 2 * hard_cap
+        self.geth_client.get_gas_price.return_value = gas_price
+        self.sci._monitor_blockchain_single()
+        self.sci.transfer_eth(get_eth_address(), 123)
+        self.geth_client.send.assert_called()
+        assert self.geth_client.send.call_args[0][0].gasprice == hard_cap
+        self.geth_client.reset_mock()
 
     def test_subscribe_to_incoming_batch_transfers(self):
         receiver_address = '0x' + 'f' * 40

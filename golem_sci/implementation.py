@@ -122,6 +122,8 @@ class SCIImplementation(SmartContractsInterface):
         self._monitor_thread = None
         self._monitor_stop = threading.Event()
 
+        self._gas_price = min(self.GAS_PRICE, geth_client.get_gas_price())
+
         if monitor:
             self._monitor_thread = threading.Thread(
                 target=self._monitor_blockchain,
@@ -205,7 +207,7 @@ class SCIImplementation(SmartContractsInterface):
         nonce = self._geth_client.get_transaction_count(self.get_eth_address())
         tx = Transaction(
             nonce=nonce,
-            gasprice=self.GAS_PRICE,
+            gasprice=self._gas_price,
             startgas=21000,
             to=decode_hex(to_address),
             value=amount,
@@ -284,7 +286,7 @@ class SCIImplementation(SmartContractsInterface):
             function_name,
             args,
             self._geth_client.get_transaction_count(self.get_eth_address()),
-            self.GAS_PRICE,
+            self._gas_price,
             gas_limit,
         )
         return self._sign_and_send_transaction(tx)
@@ -300,6 +302,7 @@ class SCIImplementation(SmartContractsInterface):
     def _monitor_blockchain_single(self):
         self.wait_until_synchronized()
         block_number = self._geth_client.get_block_number()
+        self._gas_price = min(self.GAS_PRICE, self._geth_client.get_gas_price())
         self._pull_changes_from_blockchain(block_number)
         self._process_awaiting_transactions(block_number)
 
