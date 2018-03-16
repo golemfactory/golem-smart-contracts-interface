@@ -147,7 +147,7 @@ class SCIImplementation(SmartContractsInterface):
     def batch_transfer(self, payments, closure_time: int) -> str:
         p = encode_payments(payments)
         gas = self.GAS_BATCH_PAYMENT_BASE + len(p) * self.GAS_PER_PAYMENT
-        return self._send_transaction(
+        return self._create_and_send_transaction(
             self._gntb,
             'batchTransfer',
             [p, closure_time],
@@ -201,8 +201,20 @@ class SCIImplementation(SmartContractsInterface):
         with self._awaiting_transactions_lock:
             self._awaiting_transactions.append((tx_hash, required_confs, cb))
 
+    def transfer_eth(self, to_address: str, amount: int) -> str:
+        nonce = self._geth_client.get_transaction_count(self.get_eth_address())
+        tx = Transaction(
+            nonce=nonce,
+            gasprice=self.GAS_PRICE,
+            startgas=21000,
+            to=decode_hex(to_address),
+            value=amount,
+            data=b'',
+        )
+        return self._sign_and_send_transaction(tx)
+
     def transfer_gnt(self, to_address: str, amount: int) -> str:
-        return self._send_transaction(
+        return self._create_and_send_transaction(
             self._gnt,
             'transfer',
             [decode_hex(to_address), amount],
@@ -210,7 +222,7 @@ class SCIImplementation(SmartContractsInterface):
         )
 
     def transfer_gntb(self, to_address: str, amount: int) -> str:
-        return self._send_transaction(
+        return self._create_and_send_transaction(
             self._gntb,
             'transfer',
             [decode_hex(to_address), amount],
@@ -222,7 +234,7 @@ class SCIImplementation(SmartContractsInterface):
             to_address: str,
             amount: int,
             data: bytes) -> str:
-        return self._send_transaction(
+        return self._create_and_send_transaction(
             self._gntb,
             'transferAndCall',
             [decode_hex(to_address), amount, data],
@@ -242,7 +254,7 @@ class SCIImplementation(SmartContractsInterface):
         return TransactionReceipt(raw) if raw else None
 
     def request_gnt_from_faucet(self) -> str:
-        return self._send_transaction(
+        return self._create_and_send_transaction(
             self._faucet,
             'create',
             [],
@@ -258,12 +270,16 @@ class SCIImplementation(SmartContractsInterface):
     def stop(self) -> None:
         self._monitor_stop.set()
 
-    def _send_transaction(
+    def _sign_and_send_transaction(self, tx: Transaction) -> str:
+        self._tx_sign(tx)
+        return self._geth_client.send(tx)
+
+    def _create_and_send_transaction(
             self,
             contract,
             function_name,
             args,
-            gas_limit):
+            gas_limit) -> str:
         tx = contract.create_transaction(
             function_name,
             args,
@@ -271,8 +287,7 @@ class SCIImplementation(SmartContractsInterface):
             self.GAS_PRICE,
             gas_limit,
         )
-        self._tx_sign(tx)
-        return self._geth_client.send(tx)
+        return self._sign_and_send_transaction(tx)
 
     def _monitor_blockchain(self):
         while not self._monitor_stop.is_set():
@@ -382,7 +397,7 @@ class SCIImplementation(SmartContractsInterface):
     ########################
 
     def open_gate(self) -> str:
-        return self._send_transaction(
+        return self._create_and_send_transaction(
             self._gntb,
             'openGate',
             [],
@@ -394,7 +409,7 @@ class SCIImplementation(SmartContractsInterface):
             .getGateAddress(decode_hex(self._address))
 
     def transfer_from_gate(self) -> str:
-        return self._send_transaction(
+        return self._create_and_send_transaction(
             self._gntb,
             'transferFromGate',
             [],
@@ -402,7 +417,7 @@ class SCIImplementation(SmartContractsInterface):
         )
 
     def convert_gntb_to_gnt(self, amount: int) -> str:
-        return self._send_transaction(
+        return self._create_and_send_transaction(
             self._gntb,
             'withdraw',
             [amount],
@@ -433,7 +448,7 @@ class SCIImplementation(SmartContractsInterface):
         return self.transfer_gntb_and_call(self._gntdeposit.address, value, b'')
 
     def unlock_deposit(self) -> str:
-        return self._send_transaction(
+        return self._create_and_send_transaction(
             self._gntdeposit,
             'unlock',
             [],
@@ -441,7 +456,7 @@ class SCIImplementation(SmartContractsInterface):
         )
 
     def withdraw_deposit(self) -> str:
-        return self._send_transaction(
+        return self._create_and_send_transaction(
             self._gntdeposit,
             'withdraw',
             [decode_hex(self._address)],
@@ -454,7 +469,7 @@ class SCIImplementation(SmartContractsInterface):
             provider_address: str,
             value: int,
             closure_time: int) -> str:
-        return self._send_transaction(
+        return self._create_and_send_transaction(
             self._gntdeposit,
             'reimburseForNoPayment',
             [requestor_address, provider_address, value, closure_time],

@@ -243,6 +243,13 @@ class IntegrationTest(TestCase):
         current_ts = self.eth_tester.get_block_by_number('pending')['timestamp']
         self.eth_tester.time_travel(current_ts + period)
 
+    def test_transfer_eth(self):
+        recipient = '0x' + 40 * 'e'
+        assert self.user_sci.get_eth_balance(recipient) == 0
+        amount = 2137
+        self.user_sci.transfer_eth(recipient, amount)
+        assert self.user_sci.get_eth_balance(recipient) == amount
+
     def test_faucet(self):
         user_addr = self.user_sci.get_eth_address()
         assert self.user_sci.get_gnt_balance(user_addr) == 0
