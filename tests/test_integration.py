@@ -268,18 +268,21 @@ class IntegrationTest(TestCase):
         assert self.user_sci.get_gntb_balance(user_addr) == 0
 
         # can't withdraw if unlocked
-        with self.assertRaises(TransactionFailed):
-            self.user_sci.withdraw_deposit()
+        self.user_sci.withdraw_deposit()
+        # eth_tester makes failed transactions raise TransactioFailed exception
+        # which isn't the same as an actual behavior. Anyway we can test it
+        # checking whether the exception has been raised.
+        assert len(self.user_sci._failed_tx_requests) == 1
 
         # can't withdraw if just unlocked
         self.user_sci.unlock_deposit()
-        with self.assertRaises(TransactionFailed):
-            self.user_sci.withdraw_deposit()
+        self.user_sci.withdraw_deposit()
+        assert len(self.user_sci._failed_tx_requests) == 2
 
         # can't withdraw if still time locked
         self._time_travel(self.gntdeposit_withdrawal_delay - 100)
-        with self.assertRaises(TransactionFailed):
-            self.user_sci.withdraw_deposit()
+        self.user_sci.withdraw_deposit()
+        assert len(self.user_sci._failed_tx_requests) == 3
 
         self._time_travel(100)
         self.user_sci.withdraw_deposit()
@@ -296,13 +299,14 @@ class IntegrationTest(TestCase):
 
         from_block = self.user_sci.get_block_number()
         # user can't force a payment
-        with self.assertRaises(TransactionFailed):
-            self.user_sci.force_payment(
-                requestor,
-                provider,
-                value,
-                closure_time,
-            )
+        self.user_sci.force_payment(
+            requestor,
+            provider,
+            value,
+            closure_time,
+        )
+        assert len(self.user_sci._failed_tx_requests) == 1
+
         # only concent can
         self.concent_sci.force_payment(requestor, provider, value, closure_time)
         assert self.user_sci.get_deposit_value(requestor) == 0

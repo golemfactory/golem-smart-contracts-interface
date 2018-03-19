@@ -144,6 +144,14 @@ class Client(object):
     def get_block_number(self):
         return self.web3.eth.blockNumber
 
+    def get_transaction(self, tx_hash):
+        """
+        Returns a transaction matching the given transaction hash.
+        :param tx_hash: The transaction hash
+        :return: Object - A transaction object
+        """
+        return self.web3.eth.getTransaction(tx_hash)
+
     def get_transaction_receipt(self, tx_hash):
         """
         Returns the receipt of a transaction by transaction hash.

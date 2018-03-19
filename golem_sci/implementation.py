@@ -5,7 +5,7 @@ from typing import Callable, List, Optional
 
 from ethereum.utils import zpad, int_to_big_endian
 from ethereum.transactions import Transaction
-from eth_utils import decode_hex
+from eth_utils import decode_hex, encode_hex
 
 from golem_sci import contracts
 from .contractwrapper import ContractWrapper
@@ -118,6 +118,9 @@ class SCIImplementation(SmartContractsInterface):
 
         self._awaiting_transactions_lock = threading.Lock()
         self._awaiting_transactions = []
+
+        self._failed_tx_requests_lock = threading.Lock()
+        self._failed_tx_requests = []
 
         self._monitor_thread = None
         self._monitor_stop = threading.Event()
@@ -274,7 +277,12 @@ class SCIImplementation(SmartContractsInterface):
 
     def _sign_and_send_transaction(self, tx: Transaction) -> str:
         self._tx_sign(tx)
-        return self._geth_client.send(tx)
+        try:
+            return self._geth_client.send(tx)
+        except Exception:
+            with self._failed_tx_requests_lock:
+                self._failed_tx_requests.append(tx)
+            return encode_hex(tx.hash)
 
     def _create_and_send_transaction(
             self,
@@ -305,6 +313,7 @@ class SCIImplementation(SmartContractsInterface):
         self._gas_price = min(self.GAS_PRICE, self._geth_client.get_gas_price())
         self._pull_changes_from_blockchain(block_number)
         self._process_awaiting_transactions(block_number)
+        self._retry_failed_transactions()
 
     def _on_filter_log(self, log, cb, required_confs: int) -> None:
         tx_hash = log['transactionHash']
@@ -394,6 +403,27 @@ class SCIImplementation(SmartContractsInterface):
 
         with self._awaiting_transactions_lock:
             self._awaiting_transactions.extend(remaining_awaiting_transactions)
+
+    def _retry_failed_transactions(self) -> None:
+        with self._failed_tx_requests_lock:
+            transactions = self._failed_tx_requests[:]
+
+        successful_tx = set()
+        for tx in transactions:
+            try:
+                tx_res = self._geth_client.get_transaction(encode_hex(tx.hash))
+                if tx_res is None:
+                    self._geth_client.send_transaction(tx)
+                else:
+                    successful_tx.add(tx.hash)
+            except Exception:
+                pass
+
+        with self._failed_tx_requests_lock:
+            self._failed_tx_requests = [
+                tx for tx in self._failed_tx_requests
+                if tx.hash not in successful_tx
+            ]
 
     ########################
     # GNT-GNTB conversions #
