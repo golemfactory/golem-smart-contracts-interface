@@ -230,3 +230,29 @@ class SCIImplementationTest(unittest.TestCase):
         del receipt[:]
         self.sci._monitor_blockchain_single()
         assert not receipt
+
+    def test_failed_requests(self):
+        self.geth_client.get_transaction_count.return_value = 0
+        self.geth_client.send.side_effect = Exception
+        tx_hash = self.sci.transfer_eth('0x' + 40 * 'a', 123)
+
+        assert type(tx_hash) == str
+        assert len(tx_hash) == 66
+        self.geth_client.get_transaction.return_value = None
+        self.sci._monitor_blockchain_single()
+        self.geth_client.get_transaction.assert_called_once_with(tx_hash)
+        self.geth_client.get_transaction.reset_mock()
+
+        self.geth_client.get_transaction.side_effect = Exception
+        self.sci._monitor_blockchain_single()
+        self.geth_client.get_transaction.assert_called_once_with(tx_hash)
+        self.geth_client.get_transaction.side_effect = None
+        self.geth_client.get_transaction.reset_mock()
+
+        self.geth_client.get_transaction.return_value = mock.Mock()
+        self.sci._monitor_blockchain_single()
+        self.geth_client.get_transaction.assert_called_once_with(tx_hash)
+        self.geth_client.get_transaction.reset_mock()
+
+        self.sci._monitor_blockchain_single()
+        self.geth_client.get_transaction.assert_not_called()
