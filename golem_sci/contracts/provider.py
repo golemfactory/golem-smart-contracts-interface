@@ -1,4 +1,11 @@
-import importlib
+from golem_sci.contracts import data
+from .data.rinkeby import (
+    golemnetworktoken,
+    golemnetworktokenbatching,
+    faucet,
+    gntdeposit,
+    gntpaymentchannels,
+)
 
 
 class ContractDataProvider:
@@ -12,7 +19,4 @@ class ContractDataProvider:
         return self._get_module(contract).ABI
 
     def _get_module(self, contract: str):
-        return importlib.import_module('golem_sci.contracts.data.{}.{}'.format(
-            self._chain,
-            contract.lower(),
-        ))
+        return getattr(getattr(data, self._chain), contract.lower())
