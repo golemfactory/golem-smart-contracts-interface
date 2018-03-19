@@ -419,8 +419,6 @@ class SCIImplementation(SmartContractsInterface):
             except Exception:
                 pass
 
-        print(successful_tx)
-
         with self._failed_tx_requests_lock:
             self._failed_tx_requests = [
                 tx for tx in self._failed_tx_requests
