@@ -449,11 +449,11 @@ class SCIImplementation(SmartContractsInterface):
             self.GAS_TRANSFER_FROM_GATE,
         )
 
-    def convert_gntb_to_gnt(self, amount: int) -> str:
+    def convert_gntb_to_gnt(self, to_address: str, amount: int) -> str:
         return self._create_and_send_transaction(
             self._gntb,
-            'withdraw',
-            [amount],
+            'withdrawTo',
+            [amount, decode_hex(to_address)],
             self.GAS_WITHDRAW,
         )
 

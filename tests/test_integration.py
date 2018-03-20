@@ -337,10 +337,11 @@ class IntegrationTest(TestCase):
         self._create_gntb()
         amount = 123
         user_addr = self.user_sci.get_eth_address()
-        self.user_sci.convert_gntb_to_gnt(amount)
-        assert self.user_sci.get_gnt_balance(user_addr) == amount
+        recipient = '0x' + 40 * 'a'
+        self.user_sci.convert_gntb_to_gnt(recipient, amount)
         assert self.user_sci.get_gntb_balance(user_addr) == \
             1000 * denoms.ether - amount
+        assert self.user_sci.get_gnt_balance(recipient) == amount
 
     def test_batch_transfer(self):
         self._create_gntb()

@@ -152,7 +152,7 @@ class SmartContractsInterface(object, metaclass=abc.ABCMeta):
 
     # Transaction
     @abc.abstractmethod
-    def convert_gntb_to_gnt(self, amount: int) -> str:
+    def convert_gntb_to_gnt(self, to_address: str, amount: int) -> str:
         pass
 
     ############################
