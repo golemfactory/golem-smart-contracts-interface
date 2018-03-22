@@ -3,6 +3,7 @@ import threading
 import time
 from typing import Callable, List, Optional
 
+from ethereum.exceptions import InvalidTransaction
 from ethereum.utils import zpad, int_to_big_endian
 from ethereum.transactions import Transaction
 from eth_utils import decode_hex, encode_hex
@@ -283,6 +284,8 @@ class SCIImplementation(SmartContractsInterface):
         self._tx_sign(tx)
         try:
             return self._geth_client.send(tx)
+        except InvalidTransaction:
+            raise
         except Exception:
             with self._failed_tx_requests_lock:
                 self._failed_tx_requests.append(tx)

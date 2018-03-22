@@ -7,8 +7,8 @@ from golem_sci.factory import new_sci
 
 from web3 import Web3
 from web3.providers.eth_tester import EthereumTesterProvider
+from ethereum.exceptions import InvalidTransaction
 from ethereum.keys import privtoaddr
-from ethereum.tester import TransactionFailed
 from eth_tester import EthereumTester
 from eth_utils import decode_hex, encode_hex, denoms
 
@@ -242,6 +242,13 @@ class IntegrationTest(TestCase):
     def _time_travel(self, period: int):
         current_ts = self.eth_tester.get_block_by_number('pending')['timestamp']
         self.eth_tester.time_travel(current_ts + period)
+
+    def test_invalid_transaction(self):
+        recipient = '0x' + 40 * 'e'
+        assert self.user_sci.get_eth_balance(recipient) == 0
+        amount = self.user_sci.get_eth_balance(self.user_sci.get_eth_address())
+        with self.assertRaises(InvalidTransaction):
+            self.user_sci.transfer_eth(recipient, amount)
 
     def test_transfer_eth(self):
         recipient = '0x' + 40 * 'e'
