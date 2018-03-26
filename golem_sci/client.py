@@ -281,7 +281,7 @@ class Client(object):
 
         def check():
             peers = self.get_peer_count()
-            logger.info("Peer count: {}".format(peers))
+            logger.debug("Geth peer count: {}".format(peers))
             if peers == 0:
                 return False
             if self.is_syncing():
