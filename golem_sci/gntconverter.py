@@ -16,6 +16,19 @@ class GNTConverter:
         self._gate_address: Optional[str] = None
         self._ongoing_conversion: bool = False
 
+        # It may happen that we are in the middle of unfinished conversion
+        # so we should pick it up and finalize
+        self._update_gate_address()
+        if self._gate_address is not None:
+            gate_balance = self._sci.get_gnt_balance(self._gate_address)
+            if gate_balance:
+                logger.info(
+                    "Gate has %f GNT, finishing previoiusly started conversion",
+                    gate_balance / denoms.ether,
+                )
+                self._ongoing_conversion = True
+                self._transfer_from_gate()
+
     def convert(self, amount: int):
         if self.is_converting():
             # This isn't a technical restriction but rather a simplification
@@ -29,13 +42,16 @@ class GNTConverter:
     def is_converting(self) -> bool:
         return self._ongoing_conversion
 
+    def _update_gate_address(self) -> None:
+        if self._gate_address is not None:
+            return
+        self._gate_address = self._sci.get_gate_address()
+        if self._gate_address and int(self._gate_address, 16) == 0:
+            self._gate_address = None
+
     def _ensure_gate(self, amount: int) -> None:
         # First step is opening the gate if it's not already opened
-        if self._gate_address is None:
-            self._gate_address = self._sci.get_gate_address()
-            if self._gate_address and int(self._gate_address, 16) == 0:
-                self._gate_address = None
-
+        self._update_gate_address()
         if self._gate_address is None:
             tx_hash = self._sci.open_gate()
             logger.info('Opening gate %s', tx_hash)
