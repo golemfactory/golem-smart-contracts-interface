@@ -63,10 +63,11 @@ class SCIImplementation(SmartContractsInterface):
     # Gas price: 20 gwei, Homestead suggested gas price.
     GAS_PRICE = 20 * 10 ** 9
 
-    GAS_TRANSFER = 90000
+    GAS_GNT_TRANSFER = 60000
     GAS_WITHDRAW = 75000
     GAS_OPEN_GATE = 320000
     GAS_TRANSFER_FROM_GATE = 110000
+    GAS_TRANSFER_AND_CALL = 90000
     # Total gas for a batchTransfer is BASE + len(payments) * PER_PAYMENT
     GAS_PER_PAYMENT = 30000
     # tx: 21000, balance substract: 5000, arithmetics < 800
@@ -215,7 +216,7 @@ class SCIImplementation(SmartContractsInterface):
         nonce = self._geth_client.get_transaction_count(self.get_eth_address())
         tx = Transaction(
             nonce=nonce,
-            gasprice=self._gas_price,
+            gasprice=self.get_current_gas_price(),
             startgas=21000,
             to=decode_hex(to_address),
             value=amount,
@@ -228,7 +229,7 @@ class SCIImplementation(SmartContractsInterface):
             self._gnt,
             'transfer',
             [decode_hex(to_address), amount],
-            self.GAS_TRANSFER,
+            self.GAS_GNT_TRANSFER,
         )
 
     def transfer_gntb(self, to_address: str, amount: int) -> str:
@@ -236,7 +237,7 @@ class SCIImplementation(SmartContractsInterface):
             self._gntb,
             'transfer',
             [decode_hex(to_address), amount],
-            self.GAS_TRANSFER,
+            self.GAS_GNT_TRANSFER,
         )
 
     def transfer_gntb_and_call(
@@ -248,7 +249,7 @@ class SCIImplementation(SmartContractsInterface):
             self._gntb,
             'transferAndCall',
             [decode_hex(to_address), amount, data],
-            self.GAS_TRANSFER,
+            self.GAS_TRANSFER_AND_CALL,
         )
 
     def send_transaction(self, tx: Transaction):
@@ -262,6 +263,9 @@ class SCIImplementation(SmartContractsInterface):
             tx_hash: str) -> Optional[TransactionReceipt]:
         raw = self._geth_client.get_transaction_receipt(tx_hash)
         return TransactionReceipt(raw) if raw else None
+
+    def get_current_gas_price(self) -> int:
+        return self._gas_price
 
     def request_gnt_from_faucet(self) -> str:
         return self._create_and_send_transaction(
@@ -301,7 +305,7 @@ class SCIImplementation(SmartContractsInterface):
             function_name,
             args,
             self._geth_client.get_transaction_count(self.get_eth_address()),
-            self._gas_price,
+            self.get_current_gas_price(),
             gas_limit,
         )
         return self._sign_and_send_transaction(tx)
