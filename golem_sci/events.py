@@ -1,6 +1,7 @@
 from typing import Dict, Any
 
 from ethereum.utils import denoms
+from eth_utils import decode_hex
 
 
 class BatchTransferEvent:
@@ -23,18 +24,13 @@ class BatchTransferEvent:
 
 
 class ForcedSubtaskPaymentEvent:
-    def __init__(
-            self,
-            tx_hash: str,
-            requestor: str,
-            provider: str,
-            amount: int,
-            subtask_id: str):
-        self.tx_hash = tx_hash
-        self.requestor = requestor
-        self.provider = provider
-        self.amount = amount
-        self.subtask_id = subtask_id
+    def __init__(self, raw_log: Dict[str, Any]):
+        self.tx_hash: str = raw_log['transactionHash']
+        self.requestor: str = '0x' + raw_log['topics'][1][26:]
+        self.provider: str = '0x' + raw_log['topics'][2][26:]
+        self.amount: int = int(raw_log['data'][2:66], 16)
+        self.subtask_id: str = \
+            decode_hex(raw_log['data'][66:130]).decode('utf-8').rstrip('\0')
 
 
 class ForcedPaymentEvent:

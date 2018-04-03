@@ -333,6 +333,57 @@ class IntegrationTest(TestCase):
         assert forced_payments[0].amount == value
         assert forced_payments[0].closure_time == closure_time
 
+    def test_forced_subtask_payment(self):
+        self._create_gntb()
+        requestor = self.user_sci.get_eth_address()
+        provider = '0x' + 40 * 'b'
+        value = 123
+        subtask_id = 'subtask_id'
+        self.user_sci.deposit_payment(value)
+
+        # subtask_id too long
+        with self.assertRaisesRegex(ValueError, 'subtask_id cannot be longer'):
+            self.concent_sci.force_subtask_payment(
+                requestor,
+                provider,
+                value,
+                'a' * 33,
+            )
+
+        from_block = self.user_sci.get_block_number()
+        # user can't force a payment
+        self.user_sci.force_subtask_payment(
+            requestor,
+            provider,
+            value,
+            subtask_id,
+        )
+        assert len(self.user_sci._failed_tx_requests) == 1
+
+        # only concent can
+        self.concent_sci.force_subtask_payment(
+            requestor,
+            provider,
+            value,
+            subtask_id,
+        )
+        assert self.user_sci.get_deposit_value(requestor) == 0
+        assert self.user_sci.get_gntb_balance(provider) == value
+        self.eth_tester.mine_block()
+        to_block = self.user_sci.get_block_number()
+        forced_payments = self.user_sci.get_forced_subtask_payments(
+            requestor,
+            provider,
+            from_block,
+            to_block,
+        )
+
+        assert len(forced_payments) == 1
+        assert forced_payments[0].requestor == requestor
+        assert forced_payments[0].provider == provider
+        assert forced_payments[0].amount == value
+        assert forced_payments[0].subtask_id == subtask_id
+
     def test_gntb_transfer(self):
         self._create_gntb()
         recipient = '0x' + 40 * 'a'

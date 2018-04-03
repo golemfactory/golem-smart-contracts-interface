@@ -478,7 +478,19 @@ class SCIImplementation(SmartContractsInterface):
             provider_address: str,
             value: int,
             subtask_id: str) -> str:
-        raise Exception("Not implemented yet")
+        if len(subtask_id) > 32:
+            raise ValueError('subtask_id cannot be longer than 32 characters')
+        return self._create_and_send_transaction(
+            self._gntdeposit,
+            'reimburseForSubtask',
+            [
+                requestor_address,
+                provider_address,
+                value,
+                subtask_id.encode('UTF-8'),
+            ],
+            self.GAS_FORCE_PAYMENT,
+        )
 
     def get_forced_subtask_payments(
             self,
@@ -486,7 +498,15 @@ class SCIImplementation(SmartContractsInterface):
             provider_address: str,
             from_block: int,
             to_block: int) -> List[ForcedSubtaskPaymentEvent]:
-        raise Exception("Not implemented yet")
+        filter_id = self._gntdeposit.on(
+            'ReimburseForSubtask',
+            from_block,
+            to_block,
+            {'_requestor': requestor_address, '_provider': provider_address},
+        )
+        logs = self._geth_client.get_filter_logs(filter_id)
+
+        return [ForcedSubtaskPaymentEvent(raw_log) for raw_log in logs]
 
     def deposit_payment(self, value: int) -> str:
         return self.transfer_gntb_and_call(self._gntdeposit.address, value, b'')
