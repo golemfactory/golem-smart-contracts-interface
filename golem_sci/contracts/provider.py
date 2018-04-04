@@ -9,6 +9,7 @@ from .data.rinkeby import (
 )
 from .data.mainnet import (
     golemnetworktoken,
+    golemnetworktokenbatching,
 )
 
 
