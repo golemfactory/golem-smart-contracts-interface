@@ -2,12 +2,16 @@ from setuptools import setup
 
 setup(
     name='Golem-Smart-Contracts-Interface',
-    version='1.0.0',
+    version='1.0.1',
     url='https://github.com/golemfactory/golem-smart-contracts-interface',
     maintainer='The Golem team',
     maintainer_email='tech@golem.network',
     packages=[
         'golem_sci',
+        'golem_sci.contracts',
+        'golem_sci.contracts.data',
+        'golem_sci.contracts.data.rinkeby',
+        'golem_sci.contracts.data.mainnet',
     ],
     python_requires='>=3.5',
     install_requires=[
