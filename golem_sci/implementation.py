@@ -290,7 +290,8 @@ class SCIImplementation(SmartContractsInterface):
             return self._geth_client.send(tx)
         except InvalidTransaction:
             raise
-        except Exception:
+        except Exception as e:
+            logger.info("Exception while sending transaction {}".format(e))
             with self._failed_tx_requests_lock:
                 self._failed_tx_requests.append(tx)
             return encode_hex(tx.hash)
