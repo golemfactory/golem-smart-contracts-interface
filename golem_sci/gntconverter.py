@@ -42,6 +42,13 @@ class GNTConverter:
     def is_converting(self) -> bool:
         return self._ongoing_conversion
 
+    def get_gate_balance(self) -> int:
+        if not self.is_converting():
+            return 0
+        if not self._gate_address:
+            return 0
+        return self._sci.get_gnt_balance(self._gate_address)
+
     def _update_gate_address(self) -> None:
         if self._gate_address is not None:
             return
