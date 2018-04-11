@@ -25,14 +25,6 @@ class EthereumClientTest(TestCase):
         self.web3.eth.getBlock.return_value = {'timestamp': get_timestamp_utc()}
         assert self.client.is_synchronized()
 
-    def test_wait_until_synchronized(self):
-        self.web3.net.peerCount = 1
-        self.web3.eth.syncing = {
-            "currentBlock": 1,
-            "highestBlock": 1,
-        }
-        assert self.client.wait_until_synchronized()
-
     def test_synchronized(self):
         syncing_status = {'startingBlock': '0x384',
                           'currentBlock': '0x386',

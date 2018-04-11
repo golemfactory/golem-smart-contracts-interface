@@ -33,7 +33,7 @@ class Client(object):
         self.web3 = web3
         # Set fake default account.
         self.web3.eth.defaultAccount = '\xff' * 20
-        self._last_sync_check = time.time()
+        self._last_sync_check = 0
         self._sync = False
 
     def get_peer_count(self):
@@ -259,20 +259,16 @@ class Client(object):
     def contract(self, address, abi):
         return self.web3.eth.contract(address=address, abi=json.loads(abi))
 
-    def wait_until_synchronized(self) -> bool:
-        is_synchronized = False
-        while not is_synchronized:
+    def wait_until_synchronized(self):
+        while True:
             try:
-                is_synchronized = self.is_synchronized()
+                if self.is_synchronized():
+                    return
             except Exception as e:
-                logger.error("Error "
-                             "while syncing with eth blockchain: "
-                             "{}".format(e))
-                is_synchronized = False
+                logger.error(
+                    "Error while syncing with eth blockchain: %r", e)
             else:
                 time.sleep(self.SYNC_CHECK_INTERVAL)
-
-        return True
 
     def is_synchronized(self):
         """ Checks if the Ethereum node is in sync with the network."""
