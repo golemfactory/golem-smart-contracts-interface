@@ -1,9 +1,6 @@
-import time
 from unittest import TestCase, mock
 
-from golem_sci.client import Client
-
-SYNC_TEST_INTERVAL = 0.01
+from golem_sci.client import Client, get_timestamp_utc
 
 
 class EthereumClientTest(TestCase):
@@ -11,37 +8,32 @@ class EthereumClientTest(TestCase):
         super().setUp()
         self.web3 = mock.Mock()
         self.client = Client(self.web3)
-
-    def check_synchronized(self):
-        assert not self.client.is_synchronized()
-        self.web3.net.peerCount = 1
-        self.web3.eth.syncing = {
-            "currentBlock": 1,
-            "highestBlock": 1,
-        }
-        self.assertFalse(self.client.is_synchronized())
-        tmp = Client.SYNC_CHECK_INTERVAL = SYNC_TEST_INTERVAL
-        time.sleep(1.5 * self.client.SYNC_CHECK_INTERVAL)
-        self.assertFalse(self.client.is_synchronized())
-        time.sleep(1.5 * self.client.SYNC_CHECK_INTERVAL)
-        self.assertTrue(self.client.is_synchronized())
-        Client.SYNC_CHECK_INTERVAL = tmp
+        self.client.SYNC_CHECK_INTERVAL = 0
 
     def test_synchronized2(self):
-        self.check_synchronized()
+        self.web3.net.peerCount = 0
+        assert not self.client.is_synchronized()
+
+        self.web3.net.peerCount = 1
+        self.web3.eth.syncing = {
+            "currentBlock": 1,
+            "highestBlock": 2,
+        }
+        assert not self.client.is_synchronized()
+
+        self.web3.eth.syncing = False
+        self.web3.eth.getBlock.return_value = {'timestamp': get_timestamp_utc()}
+        assert self.client.is_synchronized()
 
     def test_wait_until_synchronized(self):
-        Client.SYNC_CHECK_INTERVAL = SYNC_TEST_INTERVAL
         self.web3.net.peerCount = 1
         self.web3.eth.syncing = {
             "currentBlock": 1,
             "highestBlock": 1,
         }
-        self.assertTrue(self.client.wait_until_synchronized())
+        assert self.client.wait_until_synchronized()
 
     def test_synchronized(self):
-        tmp = Client.SYNC_CHECK_INTERVAL
-        Client.SYNC_CHECK_INTERVAL = SYNC_TEST_INTERVAL
         syncing_status = {'startingBlock': '0x384',
                           'currentBlock': '0x386',
                           'highestBlock': '0x454'}
@@ -56,66 +48,10 @@ class EthereumClientTest(TestCase):
             'currentBlock': 123,
             'highestBlock': 1234,
         }
-        self.web3.eth.getBlock.return_value = {"timestamp": time.time()}
+        self.web3.eth.getBlock.return_value = {"timestamp": get_timestamp_utc()}
 
         for c in combinations:
             print("Subtest {}".format(c))
-            # Allow reseting the status.
-            time.sleep(1.5 * Client.SYNC_CHECK_INTERVAL)
-            self.web3.net.peerCount = 0
-            self.assertFalse(self.client.is_synchronized())
-            time.sleep(1.5 * Client.SYNC_CHECK_INTERVAL)
             self.web3.net.peerCount = c[0]
             self.web3.eth.syncing = c[1]
-            # First time is always no.a
-            self.assertFalse(self.client.is_synchronized())
-            time.sleep(1.5 * Client.SYNC_CHECK_INTERVAL)
-            self.assertTrue(self.client.is_synchronized() == (c[0] and not c[1]))  # noqa
-        Client.SYNC_CHECK_INTERVAL = tmp
-
-    def test_synchronized_unstable(self):
-        tmp = Client.SYNC_CHECK_INTERVAL
-        Client.SYNC_CHECK_INTERVAL = SYNC_TEST_INTERVAL
-        syncing_status = {
-            'startingBlock': '0x0',
-            'currentBlock': '0x1',
-            'highestBlock': '0x4096',
-        }
-        synced_status = {
-            'startingBlock': '0x0',
-            'currentBlock': '0x1',
-            'highestBlock': '0x1',
-        }
-
-        self.web3.net.peerCount = 1
-        self.web3.eth.syncing = synced_status
-        self.assertFalse(self.client.is_synchronized())
-        time.sleep(1.5 * Client.SYNC_CHECK_INTERVAL)
-        self.web3.net.peerCount = 1
-        self.web3.eth.syncing = syncing_status
-        self.assertFalse(self.client.is_synchronized())
-        time.sleep(1.5 * Client.SYNC_CHECK_INTERVAL)
-        self.assertFalse(self.client.is_synchronized())
-
-        self.web3.net.peerCount = 1
-        self.web3.eth.syncing = synced_status
-        self.assertFalse(self.client.is_synchronized())
-        time.sleep(1.5 * Client.SYNC_CHECK_INTERVAL)
-        self.assertFalse(self.client.is_synchronized())
-        time.sleep(1.5 * Client.SYNC_CHECK_INTERVAL)
-        self.assertTrue(self.client.is_synchronized())
-        time.sleep(1.5 * Client.SYNC_CHECK_INTERVAL)
-        self.web3.net.peerCount = 0
-        self.web3.eth.syncing = synced_status
-        self.assertFalse(self.client.is_synchronized())
-        time.sleep(1.5 * Client.SYNC_CHECK_INTERVAL)
-        self.web3.net.peerCount = 2
-        self.web3.eth.syncing = synced_status
-        self.assertFalse(self.client.is_synchronized())
-        time.sleep(1.5 * Client.SYNC_CHECK_INTERVAL)
-        self.assertTrue(self.client.is_synchronized())
-        time.sleep(1.5 * Client.SYNC_CHECK_INTERVAL)
-        self.web3.net.peerCount = 2
-        self.web3.eth.syncing = syncing_status
-        self.assertFalse(self.client.is_synchronized())
-        Client.SYNC_CHECK_INTERVAL = tmp
+            assert self.client.is_synchronized() == (c[0] and not c[1])

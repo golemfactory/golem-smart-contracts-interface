@@ -35,7 +35,6 @@ class Client(object):
         self.web3.eth.defaultAccount = '\xff' * 20
         self._last_sync_check = time.time()
         self._sync = False
-        self._temp_sync = False
 
     def get_peer_count(self):
         """
@@ -50,6 +49,11 @@ class Client(object):
         """
         syncing = self.web3.eth.syncing
         if syncing:
+            logger.info(
+                "currentBlock: %r\t highestBlock: %r",
+                syncing['currentBlock'],
+                syncing['highestBlock'],
+            )
             return syncing['currentBlock'] < syncing['highestBlock']
 
         # node may not have started syncing yet
@@ -273,48 +277,24 @@ class Client(object):
     def is_synchronized(self):
         """ Checks if the Ethereum node is in sync with the network."""
         if time.time() - self._last_sync_check <= self.SYNC_CHECK_INTERVAL:
-            # When checking again within 10 s return previous status.
-            # This also handles geth issue where synchronization starts after
-            # 10 s since the node was started.
             return self._sync
         self._last_sync_check = time.time()
 
-        def check():
-            peers = self.get_peer_count()
-            logger.debug("Geth peer count: {}".format(peers))
-            if peers == 0:
-                return False
-            if self.is_syncing():
-                logger.info("Node is syncing...")
-                syncing = self.web3.eth.syncing
-                if syncing:
-                    logger.info("currentBlock: {}\t highestBlock: {}".format(
-                        syncing['currentBlock'],
-                        syncing['highestBlock']))
-                return False
-            return True
+        synced = True
 
-        # TODO: This can be improved now because we use Ethereum Ropsten.
-        # Normally we should check the time of latest block, but Golem testnet
-        # does not produce block regularly. The workaround is to wait for 2
-        # confirmations.
-        if not check():
-            # Reset both sync flags. We have to start over.
-            self._temp_sync = False
-            self._sync = False
-            return False
+        peers = self.get_peer_count()
+        logger.debug("Geth peer count: %d", peers)
+        if peers == 0:
+            synced = False
+        elif self.is_syncing():
+            logger.info("Geth node is syncing...")
+            synced = False
 
-        if not self._temp_sync:
-            # Set the first flag. We will check again in SYNC_CHECK_INTERVAL s.
-            self._temp_sync = True
-            return False
+        if synced and not self._sync:
+            logger.info("Geth node is synchronized")
 
-        if not self._sync:
-            # Second confirmation of being in sync. We are sure.
-            self._sync = True
-            logger.info("Synchronized!")
-
-        return True
+        self._sync = synced
+        return self._sync
 
     @staticmethod
     def __add_padding(address):
