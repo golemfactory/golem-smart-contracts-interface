@@ -288,10 +288,12 @@ class SCIImplementation(SmartContractsInterface):
         self._tx_sign(tx)
         try:
             return self._geth_client.send(tx)
-        except InvalidTransaction:
+        except ValueError:
             raise
         except Exception as e:
-            logger.info("Exception while sending transaction {}".format(e))
+            logger.info(
+                "Exception while sending transaction {}, it will be retried {}"
+                .format(tx.hash, e))
             with self._failed_tx_requests_lock:
                 self._failed_tx_requests.append(tx)
             return encode_hex(tx.hash)
@@ -425,11 +427,16 @@ class SCIImplementation(SmartContractsInterface):
             try:
                 tx_res = self._geth_client.get_transaction(encode_hex(tx.hash))
                 if tx_res is None:
+                    logger.info('Retrying transaction %r', tx.hash)
                     self._geth_client.send_transaction(tx)
                 else:
                     successful_tx.add(tx.hash)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(
+                    "Exception while sending transaction %r: %r",
+                    tx.hash,
+                    e,
+                )
 
         with self._failed_tx_requests_lock:
             self._failed_tx_requests = [

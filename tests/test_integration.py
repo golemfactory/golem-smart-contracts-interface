@@ -243,13 +243,6 @@ class IntegrationTest(TestCase):
         current_ts = self.eth_tester.get_block_by_number('pending')['timestamp']
         self.eth_tester.time_travel(current_ts + period)
 
-    def test_invalid_transaction(self):
-        recipient = '0x' + 40 * 'e'
-        assert self.user_sci.get_eth_balance(recipient) == 0
-        amount = self.user_sci.get_eth_balance(self.user_sci.get_eth_address())
-        with self.assertRaises(InvalidTransaction):
-            self.user_sci.transfer_eth(recipient, amount)
-
     def test_transfer_eth(self):
         recipient = '0x' + 40 * 'e'
         assert self.user_sci.get_eth_balance(recipient) == 0
