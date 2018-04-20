@@ -22,6 +22,7 @@ setup(
         'eth-utils==0.7.4',
         'eth-tester==0.1.0b15',
         'pytz',
+        'rlp==0.6.0',
         'web3==3.16.4',
     ],
 )
