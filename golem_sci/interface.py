@@ -11,11 +11,11 @@ from .events import (
 
 class TransactionReceipt:
     def __init__(self, raw_receipt: Dict[str, Any]):
-        self.tx_hash = raw_receipt['transactionHash']
-        self.status = raw_receipt['status'] == 1
-        self.block_hash = raw_receipt['blockHash']
-        self.block_number = raw_receipt['blockNumber']
-        self.gas_used = raw_receipt['gasUsed']
+        self.tx_hash: str = raw_receipt['transactionHash']
+        self.status: bool = raw_receipt['status'] == 1
+        self.block_hash: str = raw_receipt['blockHash']
+        self.block_number: int = raw_receipt['blockNumber']
+        self.gas_used: int = raw_receipt['gasUsed']
 
 
 class SmartContractsInterface(object, metaclass=abc.ABCMeta):

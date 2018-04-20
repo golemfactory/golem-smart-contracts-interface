@@ -15,6 +15,7 @@ class GNTConverter:
         self._sci = sci
         self._gate_address: Optional[str] = None
         self._ongoing_conversion: bool = False
+        self._amount_to_convert = 0
 
         # It may happen that we are in the middle of unfinished conversion
         # so we should pick it up and finalize
@@ -23,7 +24,7 @@ class GNTConverter:
             gate_balance = self._sci.get_gnt_balance(self._gate_address)
             if gate_balance:
                 logger.info(
-                    "Gate has %f GNT, finishing previoiusly started conversion",
+                    "Gate has %f GNT, finishing previously started conversion",
                     gate_balance / denoms.ether,
                 )
                 self._ongoing_conversion = True
@@ -36,8 +37,9 @@ class GNTConverter:
             raise Exception('Can process only single conversion at once')
 
         self._ongoing_conversion = True
+        self._amount_to_convert = amount
 
-        self._ensure_gate(amount)
+        self._process()
 
     def is_converting(self) -> bool:
         return self._ongoing_conversion
@@ -49,6 +51,28 @@ class GNTConverter:
             return 0
         return self._sci.get_gnt_balance(self._gate_address)
 
+    def _process(self) -> None:
+        try:
+            self._update_gate_address()
+
+            if self._amount_to_convert > 0:
+                # First step is to open the gate if it doesn't exist already
+                if self._gate_address is None:
+                    self._ensure_gate()
+                    return
+                # Next step is to transfer GNT to the gate
+                self._transfer_to_gate()
+                return
+
+            # Last step is to transfer GNT from the gate, finalizing conversion
+            if self.get_gate_balance() > 0:
+                self._transfer_from_gate()
+            else:
+                self._conversion_finalized()
+        except Exception:
+            self._ongoing_conversion = False
+            raise
+
     def _update_gate_address(self) -> None:
         if self._gate_address is not None:
             return
@@ -56,46 +80,43 @@ class GNTConverter:
         if self._gate_address and int(self._gate_address, 16) == 0:
             self._gate_address = None
 
-    def _ensure_gate(self, amount: int) -> None:
-        # First step is opening the gate if it's not already opened
-        self._update_gate_address()
-        if self._gate_address is None:
-            tx_hash = self._sci.open_gate()
-            logger.info('Opening gate %s', tx_hash)
-            self._sci.on_transaction_confirmed(
-                tx_hash,
-                self.REQUIRED_CONFS,
-                lambda _: self._ensure_gate(amount),
-            )
-            return
-
-        self._transfer_to_gate(amount)
-
-    def _transfer_to_gate(self, amount: int) -> None:
-        # Second step is to transfer the desired amount of GNT to the gate
-        tx_hash = self._sci.transfer_gnt(
-            self._gate_address,
-            amount,
-        )
-        logger.info(
-            'Transfering %f GNT to the gate %s',
-            amount / denoms.ether,
-            tx_hash,
-        )
+    def _ensure_gate(self) -> None:
+        tx_hash = self._sci.open_gate()
+        logger.info('Opening gate %s', tx_hash)
         self._sci.on_transaction_confirmed(
             tx_hash,
             self.REQUIRED_CONFS,
-            lambda _: self._transfer_from_gate(),
+            lambda _: self._process(),
+        )
+
+    def _transfer_to_gate(self) -> None:
+        tx_hash = self._sci.transfer_gnt(
+            self._gate_address,
+            self._amount_to_convert,
+        )
+        logger.info(
+            'Transfering %f GNT to the gate %s',
+            self._amount_to_convert / denoms.ether,
+            tx_hash,
+        )
+
+        def on_confirmed(receipt):
+            if receipt.status:
+                self._amount_to_convert = 0
+            self._process()
+        self._sci.on_transaction_confirmed(
+            tx_hash,
+            self.REQUIRED_CONFS,
+            on_confirmed,
         )
 
     def _transfer_from_gate(self) -> None:
-        # Last step is to transfer GNT from the gate to GNTB contract
         tx_hash = self._sci.transfer_from_gate()
         logger.info('Transfering GNT from the gate %s', tx_hash)
         self._sci.on_transaction_confirmed(
             tx_hash,
             self.REQUIRED_CONFS,
-            lambda _: self._conversion_finalized(),
+            lambda _: self._process(),
         )
 
     def _conversion_finalized(self) -> None:
