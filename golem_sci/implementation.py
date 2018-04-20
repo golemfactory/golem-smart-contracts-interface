@@ -3,7 +3,6 @@ import threading
 import time
 from typing import Callable, List, Optional
 
-from ethereum.exceptions import InvalidTransaction
 from ethereum.utils import zpad, int_to_big_endian
 from ethereum.transactions import Transaction
 from eth_utils import decode_hex, encode_hex
@@ -62,6 +61,7 @@ class SubscriptionFilter:
 class SCIImplementation(SmartContractsInterface):
     # Gas price: 20 gwei, Homestead suggested gas price.
     GAS_PRICE = 20 * 10 ** 9
+    GAS_PRICE_MIN = 10 ** 8
 
     GAS_GNT_TRANSFER = 60000
     GAS_WITHDRAW = 75000
@@ -131,7 +131,7 @@ class SCIImplementation(SmartContractsInterface):
         self._monitor_thread = None
         self._monitor_stop = threading.Event()
 
-        self._gas_price = min(self.GAS_PRICE, geth_client.get_gas_price())
+        self._update_gas_price()
 
         if monitor:
             self._monitor_thread = threading.Thread(
@@ -313,6 +313,12 @@ class SCIImplementation(SmartContractsInterface):
         )
         return self._sign_and_send_transaction(tx)
 
+    def _update_gas_price(self) -> None:
+        self._gas_price = max(
+            self.GAS_PRICE_MIN,
+            min(self.GAS_PRICE, self._geth_client.get_gas_price()),
+        )
+
     def _monitor_blockchain(self):
         while not self._monitor_stop.is_set():
             try:
@@ -324,7 +330,7 @@ class SCIImplementation(SmartContractsInterface):
     def _monitor_blockchain_single(self):
         self.wait_until_synchronized()
         block_number = self._geth_client.get_block_number()
-        self._gas_price = min(self.GAS_PRICE, self._geth_client.get_gas_price())
+        self._update_gas_price()
         self._pull_changes_from_blockchain(block_number)
         self._process_awaiting_transactions(block_number)
         self._retry_failed_transactions()
