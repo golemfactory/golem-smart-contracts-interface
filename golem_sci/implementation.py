@@ -8,14 +8,18 @@ from ethereum.transactions import Transaction
 from eth_utils import decode_hex, encode_hex
 
 from golem_sci import contracts
-from .contractwrapper import ContractWrapper
-from .interface import SmartContractsInterface, TransactionReceipt
 from .client import Client, FilterNotFoundException
+from .contractwrapper import ContractWrapper
+from .interface import SmartContractsInterface
 from .events import (
     BatchTransferEvent,
     ForcedPaymentEvent,
     ForcedSubtaskPaymentEvent,
     CoverAdditionalVerificationEvent,
+)
+from .structs import (
+    Block,
+    TransactionReceipt,
 )
 
 logger = logging.getLogger("golem_sci.implementation")
@@ -211,6 +215,9 @@ class SCIImplementation(SmartContractsInterface):
             cb: Callable[[TransactionReceipt], None]) -> None:
         with self._awaiting_transactions_lock:
             self._awaiting_transactions.append((tx_hash, required_confs, cb))
+
+    def get_block_by_number(self, number: int) -> Block:
+        return Block(self._geth_client.get_block(number))
 
     def transfer_eth(self, to_address: str, amount: int) -> str:
         nonce = self._geth_client.get_transaction_count(self.get_eth_address())

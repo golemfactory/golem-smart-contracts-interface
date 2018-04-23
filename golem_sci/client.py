@@ -5,6 +5,7 @@ import rlp
 import time
 from calendar import timegm
 from datetime import datetime
+from typing import Union
 
 from ethereum.utils import zpad
 
@@ -58,7 +59,7 @@ class Client(object):
 
         # node may not have started syncing yet
         try:
-            last_block = self.web3.eth.getBlock('latest')
+            last_block = self.get_block('latest')
         except Exception as ex:
             logger.debug(ex)
             return False
@@ -67,6 +68,9 @@ class Client(object):
         else:
             timestamp = last_block.timestamp
         return get_timestamp_utc() - timestamp > 120
+
+    def get_block(self, block: Union[int, str]):
+        return self.web3.eth.getBlock(block)
 
     def get_transaction_count(self, address):
         """

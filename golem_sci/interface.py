@@ -1,4 +1,4 @@
-from typing import Any, Callable, Dict, Optional, List
+from typing import Callable, Optional, List
 import abc
 
 from .events import (
@@ -7,15 +7,10 @@ from .events import (
     ForcedSubtaskPaymentEvent,
     CoverAdditionalVerificationEvent,
 )
-
-
-class TransactionReceipt:
-    def __init__(self, raw_receipt: Dict[str, Any]):
-        self.tx_hash: str = raw_receipt['transactionHash']
-        self.status: bool = raw_receipt['status'] == 1
-        self.block_hash: str = raw_receipt['blockHash']
-        self.block_number: int = raw_receipt['blockNumber']
-        self.gas_used: int = raw_receipt['gasUsed']
+from .structs import (
+    Block,
+    TransactionReceipt,
+)
 
 
 class SmartContractsInterface(object, metaclass=abc.ABCMeta):
@@ -103,6 +98,10 @@ class SmartContractsInterface(object, metaclass=abc.ABCMeta):
         Will invoke callback after the transaction has been confirmed
         required number of times.
         """
+        pass
+
+    @abc.abstractmethod
+    def get_block_by_number(self, number: int) -> Block:
         pass
 
     # Transaction
