@@ -222,11 +222,18 @@ class SCIImplementation(SmartContractsInterface):
     def get_block_by_number(self, number: int) -> Block:
         return Block(self._geth_client.get_block(number))
 
-    def transfer_eth(self, to_address: str, amount: int) -> str:
+    def transfer_eth(
+            self,
+            to_address: str,
+            amount: int,
+            gas_price: Optional[int] = None) -> str:
+        if gas_price is None:
+            gas_price = self.get_current_gas_price()
+
         nonce = self._geth_client.get_transaction_count(self.get_eth_address())
         tx = Transaction(
             nonce=nonce,
-            gasprice=self.get_current_gas_price(),
+            gasprice=gas_price,
             startgas=21000,
             to=decode_hex(to_address),
             value=amount,

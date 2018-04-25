@@ -110,7 +110,11 @@ class SmartContractsInterface(object, metaclass=abc.ABCMeta):
 
     # Transaction
     @abc.abstractmethod
-    def transfer_eth(self, to_address: str, amount: int) -> str:
+    def transfer_eth(
+            self,
+            to_address: str,
+            amount: int,
+            gas_price: Optional[int] = None) -> str:
         pass
 
     # Transaction
