@@ -216,6 +216,9 @@ class SCIImplementation(SmartContractsInterface):
         with self._awaiting_transactions_lock:
             self._awaiting_transactions.append((tx_hash, required_confs, cb))
 
+    def get_latest_block(self) -> Block:
+        return self.get_block_by_number(self.get_block_number())
+
     def get_block_by_number(self, number: int) -> Block:
         return Block(self._geth_client.get_block(number))
 

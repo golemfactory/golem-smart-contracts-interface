@@ -101,6 +101,10 @@ class SmartContractsInterface(object, metaclass=abc.ABCMeta):
         pass
 
     @abc.abstractmethod
+    def get_latest_block(self) -> Block:
+        pass
+
+    @abc.abstractmethod
     def get_block_by_number(self, number: int) -> Block:
         pass
 
