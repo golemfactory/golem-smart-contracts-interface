@@ -7,7 +7,6 @@ from golem_sci.factory import new_sci
 
 from web3 import Web3
 from web3.providers.eth_tester import EthereumTesterProvider
-from ethereum.exceptions import InvalidTransaction
 from ethereum.keys import privtoaddr
 from eth_tester import EthereumTester
 from eth_utils import decode_hex, encode_hex, denoms
@@ -20,8 +19,8 @@ web3.providers.eth_tester.main.API_ENDPOINTS['eth']['sendRawTransaction'] = \
 
 def mock_payment(payee: str, amount: int):
     payment = mock.Mock()
-    payment.payee = decode_hex(payee)
-    payment.value = amount
+    payment.payee = payee
+    payment.amount = amount
     return payment
 
 
@@ -399,17 +398,15 @@ class IntegrationTest(TestCase):
         payee1 = '0x' + 40 * 'a'
         payee2 = '0x' + 40 * 'b'
         amount1 = 123
-        amount21 = 234
-        amount22 = 345
+        amount2 = 234
         closure_time = 555
 
         payment1 = mock_payment(payee1, amount1)
-        payment21 = mock_payment(payee2, amount21)
-        payment22 = mock_payment(payee2, amount22)
+        payment2 = mock_payment(payee2, amount2)
 
         from_block = self.user_sci.get_block_number()
         tx_hash = self.user_sci.batch_transfer(
-            [payment1, payment21, payment22],
+            [payment1, payment2],
             closure_time,
         )
         self.eth_tester.mine_block()
@@ -435,10 +432,10 @@ class IntegrationTest(TestCase):
             from_block,
             to_block,
         )
-        assert self.user_sci.get_gntb_balance(payee2) == amount21 + amount22
+        assert self.user_sci.get_gntb_balance(payee2) == amount2
         assert len(batch_transfers2) == 1
         assert batch_transfers2[0].tx_hash == tx_hash
-        assert batch_transfers2[0].amount == amount21 + amount22
+        assert batch_transfers2[0].amount == amount2
         assert batch_transfers2[0].sender == self.user_sci.get_eth_address()
         assert batch_transfers2[0].receiver == payee2
         assert batch_transfers2[0].closure_time == closure_time

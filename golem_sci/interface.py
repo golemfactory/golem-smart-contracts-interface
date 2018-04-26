@@ -9,6 +9,7 @@ from .events import (
 )
 from .structs import (
     Block,
+    Payment,
     TransactionReceipt,
 )
 
@@ -138,7 +139,7 @@ class SmartContractsInterface(object, metaclass=abc.ABCMeta):
 
     # Transaction
     @abc.abstractmethod
-    def batch_transfer(self, payments, closure_time: int) -> str:
+    def batch_transfer(self, payments: List[Payment], closure_time: int) -> str:
         pass
 
     ########################

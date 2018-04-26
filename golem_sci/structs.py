@@ -31,3 +31,9 @@ class TransactionReceipt:
                 self.block_number,
                 self.gas_used,
             )
+
+
+class Payment:
+    def __init__(self, payee: str, amount: int) -> None:
+        self.payee: str = payee
+        self.amount: int = amount

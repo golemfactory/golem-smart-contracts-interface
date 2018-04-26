@@ -19,9 +19,23 @@ def _check_secp256k1_recovery():
 
 _check_secp256k1_recovery()
 
+from .interface import SmartContractsInterface  # noqa
 
 from .factory import (  # noqa
     new_sci,
     new_sci_ipc,
     new_sci_rpc,
+)
+
+from .structs import (  # noqa
+    Block,
+    Payment,
+    TransactionReceipt,
+)
+
+from .events import (  # noqa
+    BatchTransferEvent,
+    ForcedPaymentEvent,
+    ForcedSubtaskPaymentEvent,
+    CoverAdditionalVerificationEvent,
 )

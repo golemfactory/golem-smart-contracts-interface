@@ -19,34 +19,23 @@ from .events import (
 )
 from .structs import (
     Block,
+    Payment,
     TransactionReceipt,
 )
 
 logger = logging.getLogger("golem_sci.implementation")
 
 
-def encode_payments(payments):
-    paymap = {}
-    for p in payments:
-        if p.payee in paymap:
-            paymap[p.payee] += p.value
-        else:
-            paymap[p.payee] = p.value
-
-    args = []
-    value = 0
-    for to, v in paymap.items():
-        max_value = 2 ** 96
-        if v >= max_value:
-            raise ValueError("v should be less than {}".format(max_value))
-        value += v
-        v = zpad(int_to_big_endian(v), 12)
-        pair = v + to
-        if len(pair) != 32:
-            raise ValueError(
-                "Incorrect pair length: {}. Should be 32".format(len(pair)))
-        args.append(pair)
-    return args
+def encode_payment(p: Payment) -> bytes:
+    max_value = 2 ** 96
+    if p.amount >= max_value:
+        raise ValueError("Payment should be less than {}".format(max_value))
+    v = zpad(int_to_big_endian(p.amount), 12)
+    pair = v + decode_hex(p.payee)
+    if len(pair) != 32:
+        raise ValueError(
+            "Incorrect pair length: {}. Should be 32".format(len(pair)))
+    return pair
 
 
 class SubscriptionFilter:
@@ -73,9 +62,8 @@ class SCIImplementation(SmartContractsInterface):
     GAS_TRANSFER_FROM_GATE = 110000
     GAS_TRANSFER_AND_CALL = 90000
     # Total gas for a batchTransfer is BASE + len(payments) * PER_PAYMENT
-    GAS_PER_PAYMENT = 30000
-    # tx: 21000, balance substract: 5000, arithmetics < 800
-    GAS_BATCH_PAYMENT_BASE = 21000 + 800 + 5000
+    GAS_PER_PAYMENT = 28000
+    GAS_BATCH_PAYMENT_BASE = 27000
     GAS_FAUCET = 90000
     # Concent methods
     GAS_UNLOCK_DEPOSIT = 55000
@@ -159,13 +147,15 @@ class SCIImplementation(SmartContractsInterface):
     def get_gntb_balance(self, address: str) -> Optional[int]:
         return self._gntb.call().balanceOf(decode_hex(address))
 
-    def batch_transfer(self, payments, closure_time: int) -> str:
-        p = encode_payments(payments)
-        gas = self.GAS_BATCH_PAYMENT_BASE + len(p) * self.GAS_PER_PAYMENT
+    def batch_transfer(self, payments: List[Payment], closure_time: int) -> str:
+        encoded_payments = []
+        for p in payments:
+            encoded_payments.append(encode_payment(p))
+        gas = self.GAS_BATCH_PAYMENT_BASE + len(payments) * self.GAS_PER_PAYMENT
         return self._create_and_send_transaction(
             self._gntb,
             'batchTransfer',
-            [p, closure_time],
+            [encoded_payments, closure_time],
             gas,
         )
 
