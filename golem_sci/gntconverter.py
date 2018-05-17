@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Callable, Optional
 import logging
 
 from ethereum.utils import denoms
@@ -16,6 +16,7 @@ class GNTConverter:
         self._gate_address: Optional[str] = None
         self._ongoing_conversion: bool = False
         self._amount_to_convert = 0
+        self._cb: Optional[Callable[[], None]] = None
 
         # It may happen that we are in the middle of unfinished conversion
         # so we should pick it up and finalize
@@ -30,13 +31,17 @@ class GNTConverter:
                 self._ongoing_conversion = True
                 self._transfer_from_gate()
 
-    def convert(self, amount: int):
+    def convert(
+            self,
+            amount: int,
+            cb: Optional[Callable[[], None]] = None) -> None:
         if self.is_converting():
             # This isn't a technical restriction but rather a simplification
             # for our use case
             raise Exception('Can process only single conversion at once')
 
         self._ongoing_conversion = True
+        self._cb = cb
         self._amount_to_convert = amount
 
         self._process()
@@ -120,5 +125,8 @@ class GNTConverter:
         )
 
     def _conversion_finalized(self) -> None:
-        self._ongoing_conversion = False
         logger.info('Conversion has been finalized')
+        self._ongoing_conversion = False
+        if self._cb:
+            self._cb()
+            self._cb = None

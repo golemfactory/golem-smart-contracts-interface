@@ -15,6 +15,10 @@ class GNTConverterTest(TestCase):
         assert not converter.is_converting()
         assert converter.get_gate_balance() == 0
 
+        cb_called = [False]
+
+        def cb():
+            cb_called[0] = True
         amount = 123 * denoms.ether
         gate_address = '0xdead'
         self.sci.get_gate_address.return_value = None
@@ -22,7 +26,7 @@ class GNTConverterTest(TestCase):
         self.sci.on_transaction_confirmed.side_effect = \
             lambda hash, confs, cb: pending_tx_cb.append(cb)
 
-        converter.convert(amount)
+        converter.convert(amount, cb)
         assert converter.is_converting()
         assert converter.get_gate_balance() == 0
         self.sci.open_gate.assert_called_once_with()
@@ -43,12 +47,14 @@ class GNTConverterTest(TestCase):
         assert converter.is_converting()
         self.sci.transfer_from_gate.assert_called_once_with()
         assert len(pending_tx_cb) == 3
+        assert not cb_called[0]
 
         self.sci.get_gnt_balance.side_effect = None
         self.sci.get_gnt_balance.return_value = 0
         pending_tx_cb[2](mock.Mock())
         assert not converter.is_converting()
         assert converter.get_gate_balance() == 0
+        assert cb_called[0]
 
     def test_unfinished_conversion(self):
         gate_address = '0xdead'
