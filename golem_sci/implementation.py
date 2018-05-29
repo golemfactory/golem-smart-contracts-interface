@@ -289,6 +289,7 @@ class SCIImplementation(SmartContractsInterface):
         return self._geth_client.is_synchronized()
 
     def stop(self) -> None:
+        self._geth_client.stop()
         self._monitor_stop.set()
 
     def _sign_and_send_transaction(self, tx: Transaction) -> str:

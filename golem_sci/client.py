@@ -36,6 +36,7 @@ class Client(object):
         self.web3.eth.defaultAccount = '\xff' * 20
         self._last_sync_check = 0
         self._sync = False
+        self._is_stopped = False
 
     def get_peer_count(self):
         """
@@ -264,7 +265,7 @@ class Client(object):
         return self.web3.eth.contract(address=address, abi=json.loads(abi))
 
     def wait_until_synchronized(self):
-        while True:
+        while not self._is_stopped:
             try:
                 if self.is_synchronized():
                     return
@@ -295,6 +296,9 @@ class Client(object):
 
         self._sync = synced
         return self._sync
+
+    def stop(self):
+        self._is_stopped = True
 
     @staticmethod
     def __add_padding(address):
