@@ -2,12 +2,12 @@ version: 2
 jobs:
    build:
      docker:
-       - image: circleci/python:3.6
+       - image: circleci/python@sha256:5266fa743b2183588d433073a2eca9b863fb8593475e3f5baa42de8fb68c6f87
      steps:
        - checkout
        - restore_cache:
            key: deps1-{{ .Branch }}-{{ checksum "setup.py" }}
-       - run: sudo apt-get install -y libgmp3-dev python3-dev
+       - run: sudo apt-get install -y libgmp3-dev
        - run:
            command: |
              python3 -m venv venv
