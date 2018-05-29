@@ -9,8 +9,6 @@ logger = logging.getLogger(__name__)
 
 
 class GNTConverter:
-    REQUIRED_CONFS = 2
-
     def __init__(self, sci: SmartContractsInterface) -> None:
         self._sci = sci
         self._gate_address: Optional[str] = None
@@ -85,7 +83,6 @@ class GNTConverter:
         logger.info('Opening gate %s', tx_hash)
         self._sci.on_transaction_confirmed(
             tx_hash,
-            self.REQUIRED_CONFS,
             lambda _: self._process(),
         )
 
@@ -108,7 +105,6 @@ class GNTConverter:
             self._process()
         self._sci.on_transaction_confirmed(
             tx_hash,
-            self.REQUIRED_CONFS,
             on_confirmed,
         )
 
@@ -117,7 +113,6 @@ class GNTConverter:
         logger.info('Transfering GNT from the gate %s', tx_hash)
         self._sci.on_transaction_confirmed(
             tx_hash,
-            self.REQUIRED_CONFS,
             lambda _: self._process(),
         )
 

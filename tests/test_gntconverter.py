@@ -20,7 +20,7 @@ class GNTConverterTest(TestCase):
         self.sci.get_gate_address.return_value = None
         pending_tx_cb = []
         self.sci.on_transaction_confirmed.side_effect = \
-            lambda hash, confs, cb: pending_tx_cb.append(cb)
+            lambda hash, cb: pending_tx_cb.append(cb)
 
         converter.convert(amount)
         assert converter.is_converting()
