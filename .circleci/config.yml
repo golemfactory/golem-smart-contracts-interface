@@ -10,7 +10,7 @@ jobs:
        - run: sudo apt-get install -y libgmp3-dev
        - run:
            command: |
-             python3 -m venv venv
+             python3 -m venv venv --clear
              . venv/bin/activate
        - run: python3 setup.py test
        - save_cache:
