@@ -5,13 +5,13 @@ from ethereum.utils import denoms
 
 from .interface import SmartContractsInterface
 
-logger = logging.getLogger("golem_sci.gnt_converter")
+logger = logging.getLogger(__name__)
 
 
 class GNTConverter:
     REQUIRED_CONFS = 2
 
-    def __init__(self, sci: SmartContractsInterface):
+    def __init__(self, sci: SmartContractsInterface) -> None:
         self._sci = sci
         self._gate_address: Optional[str] = None
         self._ongoing_conversion: bool = False
@@ -90,6 +90,8 @@ class GNTConverter:
         )
 
     def _transfer_to_gate(self) -> None:
+        if self._gate_address is None:
+            raise Exception('Cannot transfer GNT to the gate, gate unknown')
         tx_hash = self._sci.transfer_gnt(
             self._gate_address,
             self._amount_to_convert,

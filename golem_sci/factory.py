@@ -6,6 +6,7 @@ from typing import Callable
 from distutils.version import StrictVersion
 from ethereum.transactions import Transaction
 from web3 import Web3, IPCProvider, HTTPProvider
+from web3.middleware import geth_poa_middleware
 
 from . import chains
 from .client import Client
@@ -13,7 +14,7 @@ from .contracts.provider import ContractDataProvider
 from .implementation import SCIImplementation
 from .interface import SmartContractsInterface
 
-logger = logging.getLogger("golem_sci.factory")
+logger = logging.getLogger(__name__)
 
 
 GENESES = {
@@ -48,6 +49,14 @@ def new_sci(
         address: str,
         tx_sign: Callable[[Transaction], None]=None,
         chain: str=chains.RINKEBY) -> SmartContractsInterface:
+    # Web3 needs this extra middleware to properly handle rinkeby chain because
+    # rinkeby is POA which violates some invariants
+    if chain == chains.RINKEBY and 'geth_rinkeby' not in web3.middleware_stack:
+        web3.middleware_stack.inject(
+            geth_poa_middleware,
+            layer=0,
+            name='geth_rinkeby',
+        )
     _ensure_connection(web3)
     _ensure_geth_version(web3)
     _ensure_genesis(web3, chain)
@@ -56,7 +65,7 @@ def new_sci(
 
 
 def _ensure_genesis(web3: Web3, chain: str):
-    genesis_hash = web3.eth.getBlock(0)['hash']
+    genesis_hash = web3.eth.getBlock(0)['hash'].hex()
     if genesis_hash != GENESES[chain]:
         raise Exception(
             'Invalid genesis block for {}, expected {}, got {}'.format(
@@ -80,7 +89,10 @@ def _ensure_geth_version(web3: Web3):
     version = web3.version.node.split('/')
     if version[0] != 'Geth':
         raise Exception('Expected geth client, got {}'.format(version[0]))
-    match = re.search('^v(\d+\.\d+\.\d+)', version[1]).group(1)
+    matches = re.search('^v(\d+\.\d+\.\d+)', version[1])
+    if matches is None:
+        raise Exception('Malformed version string: {}'.format(version[1]))
+    match = matches.group(1)
 
     ver = StrictVersion(match)
     logger.info('Geth version: %s', ver)

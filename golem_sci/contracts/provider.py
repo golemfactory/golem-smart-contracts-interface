@@ -1,5 +1,5 @@
 from golem_sci.contracts import data
-# Without these imports the `getattr` below don't work
+# Without these imports the `getattr`below doesn't work
 from .data.rinkeby import (
     golemnetworktoken,
     golemnetworktokenbatching,
@@ -8,8 +8,8 @@ from .data.rinkeby import (
     gntpaymentchannels,
 )
 from .data.mainnet import (
-    golemnetworktoken,
-    golemnetworktokenbatching,
+    golemnetworktoken as maingnt,
+    golemnetworktokenbatching as maingntb,
 )
 
 

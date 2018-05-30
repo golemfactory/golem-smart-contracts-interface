@@ -9,7 +9,7 @@ from typing import Union
 
 from ethereum.utils import zpad
 
-logger = logging.getLogger('golem_sci.client')
+logger = logging.getLogger(__name__)
 
 
 class FilterNotFoundException(Exception):
@@ -84,14 +84,14 @@ class Client(object):
         """
         return self.web3.eth.getTransactionCount(address, 'pending')
 
-    def send(self, transaction):
+    def send(self, transaction) -> str:
         """
         Sends signed Ethereum transaction.
         :return The 32 Bytes transaction hash as HEX string
         """
         raw_data = rlp.encode(transaction)
         hex_data = self.web3.toHex(raw_data)
-        return self.web3.eth.sendRawTransaction(hex_data)
+        return self.web3.eth.sendRawTransaction(hex_data).hex()
 
     def get_balance(self, account, block=None):
         """
