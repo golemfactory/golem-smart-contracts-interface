@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name='Golem-Smart-Contracts-Interface',
-    version='1.1.1',
+    version='1.2.0',
     url='https://github.com/golemfactory/golem-smart-contracts-interface',
     maintainer='The Golem team',
     maintainer_email='tech@golem.network',
