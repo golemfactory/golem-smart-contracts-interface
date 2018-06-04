@@ -1,19 +1,40 @@
 version: 2
 jobs:
-   build:
-     docker:
-       - image: circleci/python@sha256:5266fa743b2183588d433073a2eca9b863fb8593475e3f5baa42de8fb68c6f87
-     steps:
-       - checkout
-       - restore_cache:
-           key: deps1-{{ .Branch }}-{{ checksum "setup.py" }}
-       - run: sudo apt-get install -y libgmp3-dev
-       - run:
-           command: |
-             python3 -m venv venv
-             . venv/bin/activate
-       - run: python3 setup.py test
-       - save_cache:
-           key: deps1-{{ .Branch }}-{{ checksum "setup.py" }}
-           paths:
-             - "venv"
+  build:
+    docker:
+      - image: ubuntu:16.04
+    steps:
+      - run:
+          name: install git
+          command: |
+            apt-get update
+            apt-get install -y git
+      - checkout
+      - restore_cache:
+          key: deps1-{{ .Branch }}-{{ checksum "setup.py" }}
+      - run:
+          name: install dependencies
+          command: |
+            apt-get install -y software-properties-common
+            add-apt-repository -y ppa:ethereum/ethereum
+            apt-get update
+            apt-get install -y ethereum
+            apt-get install -y libgmp3-dev
+            apt-get install -y python3
+            apt-get install -y python3-dev
+            apt-get install -y python3-venv
+            apt-get install -y python3-setuptools
+            apt-get install -y pandoc
+            apt-get install -y g++
+      - run:
+          command: |
+            python3 -m venv venv
+            . venv/bin/activate
+            pip install --upgrade pip
+            pip install web3==4.2.1
+      - run:
+          python3 setup.py test
+      - save_cache:
+          key: deps1-{{ .Branch }}-{{ checksum "setup.py" }}
+          paths:
+            - "venv"
