@@ -7,14 +7,9 @@ from golem_sci.factory import new_sci
 
 from web3 import Web3
 from web3.providers.eth_tester import EthereumTesterProvider
-from ethereum.keys import privtoaddr
+from ethereum.utils import privtoaddr
 from eth_tester import EthereumTester
-from eth_utils import decode_hex, encode_hex, denoms
-
-# This can go away after updating to web3 4.0.0
-import web3.providers.eth_tester.main
-web3.providers.eth_tester.main.API_ENDPOINTS['eth']['sendRawTransaction'] = \
-    web3.providers.eth_tester.main.call_eth_tester('send_raw_transaction')
+from eth_utils import encode_hex, denoms, to_checksum_address
 
 
 def mock_payment(payee: str, amount: int):
@@ -35,6 +30,10 @@ class MockProvider:
         return self.data[contract]['abi']
 
 
+def privtochecksumaddr(priv):
+    return to_checksum_address(encode_hex(privtoaddr(priv)))
+
+
 class IntegrationTest(TestCase):
     def _deploy_gnt(self, web3, golem_address: str):
         addr = self.eth_tester.get_accounts()[0]
@@ -45,15 +44,12 @@ class IntegrationTest(TestCase):
             bytecode=golemnetworktoken.BIN,
             abi=json.loads(golemnetworktoken.ABI),
         )
-        gnt_tx = gnt.deploy(
-            transaction={'from': addr},
-            args=[
-                decode_hex(golem_address),
-                decode_hex(golem_address),
-                block_number + 2,
-                block_number + 3,
-            ],
-        )
+        gnt_tx = gnt.constructor(
+            golem_address,
+            golem_address,
+            block_number + 2,
+            block_number + 3,
+        ).transact(transaction={'from': addr})
         gnt_address = \
             web3.eth.getTransactionReceipt(gnt_tx)['contractAddress']
         self.provider.data[contracts.GolemNetworkToken] = {
@@ -61,29 +57,28 @@ class IntegrationTest(TestCase):
             'abi': golemnetworktoken.ABI,
         }
         gnt_funder = self.eth_tester.get_accounts()[1]
-        gnt.transact({
+        gnt.functions.create().transact({
             'from': gnt_funder,
             'value': 5 * 10 ** 16,
             'to': gnt_address,
-        }).create()
-        total_gnt = gnt.call({
+        })
+        total_gnt = gnt.functions.totalSupply().call({
             'from': gnt_funder,
             'to': gnt_address,
-        }).totalSupply()
+        })
         self.eth_tester.mine_blocks(2)
-        gnt.transact({
+        gnt.functions.finalize().transact({
             'from': gnt_funder,
             'to': gnt_address,
-        }).finalize()
+        })
 
         from golem_sci.contracts.data.rinkeby import faucet
         faucet_contract = web3.eth.contract(
             bytecode=faucet.BIN,
             abi=json.loads(faucet.ABI),
         )
-        faucet_tx = faucet_contract.deploy(
+        faucet_tx = faucet_contract.constructor(gnt_address).transact(
             transaction={'from': addr},
-            args=[decode_hex(gnt_address)],
         )
         faucet_address = \
             web3.eth.getTransactionReceipt(faucet_tx)['contractAddress']
@@ -92,10 +87,10 @@ class IntegrationTest(TestCase):
             'abi': faucet.ABI,
         }
 
-        gnt.transact({
+        gnt.functions.transfer(faucet_address, total_gnt).transact({
             'from': gnt_funder,
             'to': gnt_address,
-        }).transfer(faucet_address, total_gnt)
+        })
 
     def _deploy_gntb(self, web3):
         addr = self.eth_tester.get_accounts()[0]
@@ -105,9 +100,8 @@ class IntegrationTest(TestCase):
             abi=json.loads(golemnetworktokenbatching.ABI),
         )
         gnt_address = self.provider.get_address(contracts.GolemNetworkToken)
-        gntb_tx = gntb.deploy(
+        gntb_tx = gntb.constructor(gnt_address).transact(
             transaction={'from': addr},
-            args=[decode_hex(gnt_address)],
         )
         gntb_address = \
             web3.eth.getTransactionReceipt(gntb_tx)['contractAddress']
@@ -126,15 +120,12 @@ class IntegrationTest(TestCase):
         )
         gntb_address = \
             self.provider.get_address(contracts.GolemNetworkTokenBatching)
-        gnt_deposit_tx = gnt_deposit.deploy(
-            transaction={'from': addr},
-            args=[
-                decode_hex(gntb_address),
-                decode_hex(concent_address),  # oracle
-                decode_hex(concent_address),  # coldwallet
-                self.gntdeposit_withdrawal_delay,
-            ],
-        )
+        gnt_deposit_tx = gnt_deposit.constructor(
+            gntb_address,
+            concent_address,  # oracle
+            concent_address,  # coldwallet
+            self.gntdeposit_withdrawal_delay,
+        ).transact(transaction={'from': addr})
         gntdeposit_address = \
             web3.eth.getTransactionReceipt(gnt_deposit_tx)['contractAddress']
         self.provider.data[contracts.GNTDeposit] = {
@@ -147,38 +138,6 @@ class IntegrationTest(TestCase):
             'address': '0x' + 40 * '3',
             'abi': '[]',
         }
-
-    def _create_eth_tester(self):
-        self.eth_tester = EthereumTester()
-
-        # some weird patching is needed for compatibility with web3
-        # mostly because of eth_tester using snake_case while web3 is using
-        # camelCase
-
-        self.eth_tester.original_create_log_filter = \
-            self.eth_tester.create_log_filter
-
-        def create_log_filter_patch(**params):
-            if 'fromBlock' in params:
-                params['from_block'] = int(params['fromBlock'], 16)
-                del params['fromBlock']
-            if 'toBlock' in params:
-                params['to_block'] = int(params['toBlock'], 16)
-                del params['toBlock']
-            return self.eth_tester.original_create_log_filter(**params)
-        self.eth_tester.create_log_filter = create_log_filter_patch
-
-        self.eth_tester.original_get_all_filter_logs = \
-            self.eth_tester.get_all_filter_logs
-
-        def get_all_filter_logs_patch(filter_id):
-            res = self.eth_tester.original_get_all_filter_logs(filter_id)
-            for i in res:
-                if 'transaction_hash' in i:
-                    i['transactionHash'] = i['transaction_hash']
-                    del i['transaction_hash']
-            return res
-        self.eth_tester.get_all_filter_logs = get_all_filter_logs_patch
 
     def _fund_account(self, from_idx: int, address: str) -> None:
         from_addr = self.eth_tester.get_accounts()[from_idx]
@@ -193,13 +152,13 @@ class IntegrationTest(TestCase):
         golem_privkey = os.urandom(32)
         concent_privkey = os.urandom(32)
         user_privkey = os.urandom(32)
-        golem_address = encode_hex(privtoaddr(golem_privkey))
-        concent_address = encode_hex(privtoaddr(concent_privkey))
-        user_address = encode_hex(privtoaddr(user_privkey))
+        golem_address = privtochecksumaddr(golem_privkey)
+        concent_address = privtochecksumaddr(concent_privkey)
+        user_address = privtochecksumaddr(user_privkey)
 
         self.provider = MockProvider()
 
-        self._create_eth_tester()
+        self.eth_tester = EthereumTester()
         web3 = Web3(EthereumTesterProvider(self.eth_tester))
 
         self._deploy_gnt(web3, golem_address)
@@ -243,7 +202,7 @@ class IntegrationTest(TestCase):
         self.eth_tester.time_travel(current_ts + period)
 
     def test_transfer_eth(self):
-        recipient = '0x' + 40 * 'e'
+        recipient = to_checksum_address('0x' + 40 * 'e')
         assert self.user_sci.get_eth_balance(recipient) == 0
         amount = 2137
         self.user_sci.transfer_eth(recipient, amount)
@@ -291,7 +250,7 @@ class IntegrationTest(TestCase):
     def test_forced_payment(self):
         self._create_gntb()
         requestor = self.user_sci.get_eth_address()
-        provider = '0x' + 40 * 'b'
+        provider = to_checksum_address('0x' + 40 * 'b')
         value = 123
         closure_time = 1337
         self.user_sci.deposit_payment(value)
@@ -328,7 +287,7 @@ class IntegrationTest(TestCase):
     def test_forced_subtask_payment(self):
         self._create_gntb()
         requestor = self.user_sci.get_eth_address()
-        provider = '0x' + 40 * 'b'
+        provider = to_checksum_address('0x' + 40 * 'b')
         value = 123
         subtask_id = 'subtask_id'
         self.user_sci.deposit_payment(value)
@@ -378,7 +337,7 @@ class IntegrationTest(TestCase):
 
     def test_gntb_transfer(self):
         self._create_gntb()
-        recipient = '0x' + 40 * 'a'
+        recipient = to_checksum_address('0x' + 40 * 'a')
         amount = 123
         self.user_sci.transfer_gntb(recipient, amount)
         assert self.user_sci.get_gntb_balance(recipient) == amount
@@ -387,7 +346,7 @@ class IntegrationTest(TestCase):
         self._create_gntb()
         amount = 123
         user_addr = self.user_sci.get_eth_address()
-        recipient = '0x' + 40 * 'a'
+        recipient = to_checksum_address('0x' + 40 * 'a')
         self.user_sci.convert_gntb_to_gnt(recipient, amount)
         assert self.user_sci.get_gntb_balance(user_addr) == \
             1000 * denoms.ether - amount
@@ -395,8 +354,8 @@ class IntegrationTest(TestCase):
 
     def test_batch_transfer(self):
         self._create_gntb()
-        payee1 = '0x' + 40 * 'a'
-        payee2 = '0x' + 40 * 'b'
+        payee1 = to_checksum_address('0x' + 40 * 'a')
+        payee2 = to_checksum_address('0x' + 40 * 'b')
         amount1 = 123
         amount2 = 234
         closure_time = 555

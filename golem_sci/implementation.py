@@ -1,7 +1,7 @@
 import logging
 import threading
 import time
-from typing import Callable, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from ethereum.utils import zpad, int_to_big_endian
 from ethereum.transactions import Transaction
@@ -9,7 +9,6 @@ from eth_utils import decode_hex, encode_hex
 
 from golem_sci import contracts
 from .client import Client, FilterNotFoundException
-from .contractwrapper import ContractWrapper
 from .interface import SmartContractsInterface
 from .events import (
     BatchTransferEvent,
@@ -23,7 +22,7 @@ from .structs import (
     TransactionReceipt,
 )
 
-logger = logging.getLogger("golem_sci.implementation")
+logger = logging.getLogger(__name__)
 
 
 def encode_payment(p: Payment) -> bytes:
@@ -44,7 +43,7 @@ class SubscriptionFilter:
             address: str,
             cb,
             required_confs: int,
-            from_block: int):
+            from_block: int) -> None:
         self.address = address
         self.cb = cb
         self.required_confs = required_confs
@@ -76,7 +75,7 @@ class SCIImplementation(SmartContractsInterface):
             address: str,
             contract_data_provider,
             tx_sign=None,
-            monitor=True):
+            monitor=True) -> None:
         """
         Performs all blockchain operations using the address as the caller.
         Uses tx_sign to sign outgoing transaction, tx_sign can be None in which
@@ -89,36 +88,33 @@ class SCIImplementation(SmartContractsInterface):
         self._address = address
         self._tx_sign = tx_sign
 
-        def make_contract_wrapper(contract: str):
+        def _make_contract(contract: str):
             try:
-                return ContractWrapper(
-                    address,
-                    self._geth_client.contract(
-                        contract_data_provider.get_address(contract),
-                        contract_data_provider.get_abi(contract),
-                    ),
+                return self._geth_client.contract(
+                    contract_data_provider.get_address(contract),
+                    contract_data_provider.get_abi(contract),
                 )
-            except Exception:
-                logger.warning("Unable to use `%s` contract", contract)
+            except Exception as e:
+                logger.warning("Unable to use `%s` contract: %r", contract, e)
                 return None
-        self._gntb = make_contract_wrapper(contracts.GolemNetworkTokenBatching)
-        self._gnt = make_contract_wrapper(contracts.GolemNetworkToken)
-        self._faucet = make_contract_wrapper(contracts.Faucet)
-        self._gntdeposit = make_contract_wrapper(contracts.GNTDeposit)
-        self._gntpaymentchannels = \
-            make_contract_wrapper(contracts.GNTPaymentChannels)
+
+        self._gntb = _make_contract(contracts.GolemNetworkTokenBatching)
+        self._gnt = _make_contract(contracts.GolemNetworkToken)
+        self._faucet = _make_contract(contracts.Faucet)
+        self._gntdeposit = _make_contract(contracts.GNTDeposit)
+        self._gntpaymentchannels = _make_contract(contracts.GNTPaymentChannels)
 
         self._subs_lock = threading.Lock()
-        self._subscriptions = {}
+        self._subscriptions: Dict[str, SubscriptionFilter] = {}
 
-        self._awaiting_callbacks = {}
+        self._awaiting_callbacks: Dict[str, Tuple] = {}
         self._cb_id = 0
 
         self._awaiting_transactions_lock = threading.Lock()
-        self._awaiting_transactions = []
+        self._awaiting_transactions: List[Tuple] = []
 
         self._failed_tx_requests_lock = threading.Lock()
-        self._failed_tx_requests = []
+        self._failed_tx_requests: List[Transaction] = []
 
         self._monitor_thread = None
         self._monitor_stop = threading.Event()
@@ -142,10 +138,12 @@ class SCIImplementation(SmartContractsInterface):
         return self._geth_client.get_balance(address)
 
     def get_gnt_balance(self, address: str) -> Optional[int]:
-        return self._gnt.call().balanceOf(decode_hex(address))
+        return self._gnt.functions.\
+            balanceOf(address).call({'from': self._address})
 
     def get_gntb_balance(self, address: str) -> Optional[int]:
-        return self._gntb.call().balanceOf(decode_hex(address))
+        return self._gntb.functions.\
+            balanceOf(address).call({'from': self._address})
 
     def batch_transfer(self, payments: List[Payment], closure_time: int) -> str:
         encoded_payments = []
@@ -165,12 +163,14 @@ class SCIImplementation(SmartContractsInterface):
             payee_address: str,
             from_block: int,
             to_block: int) -> List[BatchTransferEvent]:
-        filter_id = self._gntb.on(
-            'BatchTransfer',
-            from_block,
-            to_block,
-            {'from': payer_address, 'to': payee_address},
-        )
+        filter_id = self._gntb.events.BatchTransfer.createFilter(
+            fromBlock=from_block,
+            toBlock=to_block,
+            argument_filters={
+                'from': payer_address,
+                'to': payee_address,
+            },
+        ).filter_id
         logs = self._geth_client.get_filter_logs(filter_id)
 
         return [BatchTransferEvent(raw_log) for raw_log in logs]
@@ -182,12 +182,11 @@ class SCIImplementation(SmartContractsInterface):
             cb: Callable[[BatchTransferEvent], None],
             required_confs: int) -> None:
         with self._subs_lock:
-            filter_id = self._gntb.on(
-                'BatchTransfer',
-                from_block,
-                'latest',
-                {'to': address},
-            )
+            filter_id = self._gntb.events.BatchTransfer.createFilter(
+                fromBlock=from_block,
+                toBlock='latest',
+                argument_filters={'to': address},
+            ).filter_id
             logs = self._geth_client.get_filter_logs(filter_id)
             for log in logs:
                 self._on_filter_log(log, cb, required_confs)
@@ -225,7 +224,7 @@ class SCIImplementation(SmartContractsInterface):
             nonce=nonce,
             gasprice=gas_price,
             startgas=21000,
-            to=decode_hex(to_address),
+            to=to_address,
             value=amount,
             data=b'',
         )
@@ -235,7 +234,7 @@ class SCIImplementation(SmartContractsInterface):
         return self._create_and_send_transaction(
             self._gnt,
             'transfer',
-            [decode_hex(to_address), amount],
+            [to_address, amount],
             self.GAS_GNT_TRANSFER,
         )
 
@@ -243,7 +242,7 @@ class SCIImplementation(SmartContractsInterface):
         return self._create_and_send_transaction(
             self._gntb,
             'transfer',
-            [decode_hex(to_address), amount],
+            [to_address, amount],
             self.GAS_GNT_TRANSFER,
         )
 
@@ -255,12 +254,9 @@ class SCIImplementation(SmartContractsInterface):
         return self._create_and_send_transaction(
             self._gntb,
             'transferAndCall',
-            [decode_hex(to_address), amount, data],
+            [to_address, amount, data],
             self.GAS_TRANSFER_AND_CALL,
         )
-
-    def send_transaction(self, tx: Transaction):
-        return self._geth_client.send(tx)
 
     def get_block_number(self) -> int:
         return self._geth_client.get_block_number()
@@ -309,15 +305,19 @@ class SCIImplementation(SmartContractsInterface):
     def _create_and_send_transaction(
             self,
             contract,
-            function_name,
-            args,
-            gas_limit) -> str:
-        tx = contract.create_transaction(
-            function_name,
-            args,
-            self._geth_client.get_transaction_count(self.get_eth_address()),
-            self.get_current_gas_price(),
-            gas_limit,
+            fn_name: str,
+            args: List[Any],
+            gas_limit: int) -> str:
+        raw_tx = contract.functions[fn_name](*args).buildTransaction({
+            'gas': gas_limit,
+        })
+        tx = Transaction(
+            nonce=self._geth_client.get_transaction_count(self._address),
+            gasprice=self.get_current_gas_price(),
+            startgas=gas_limit,
+            to=raw_tx['to'],
+            value=0,
+            data=decode_hex(raw_tx['data']),
         )
         return self._sign_and_send_transaction(tx)
 
@@ -351,7 +351,7 @@ class SCIImplementation(SmartContractsInterface):
             cb_copy = cb
             event = BatchTransferEvent(log)
             logger.info(
-                'Detected incoming batch transfer %r, waiting for confirmation',
+                'Detected incoming batch transfer %s, waiting for confirmation',
                 event,
             )
 
@@ -398,7 +398,7 @@ class SCIImplementation(SmartContractsInterface):
                         )
                         cb()
                     except Exception as e:
-                        logger.error(e)
+                        logger.error('Tx callback exception: %r', e)
                     to_remove.append(key)
 
             for key in to_remove:
@@ -442,7 +442,7 @@ class SCIImplementation(SmartContractsInterface):
                 tx_res = self._geth_client.get_transaction(encode_hex(tx.hash))
                 if tx_res is None:
                     logger.info('Retrying transaction %r', tx.hash)
-                    self._geth_client.send_transaction(tx)
+                    self._geth_client.send(tx)
                 else:
                     successful_tx.add(tx.hash)
             except Exception as e:
@@ -471,8 +471,8 @@ class SCIImplementation(SmartContractsInterface):
         )
 
     def get_gate_address(self) -> str:
-        return self._gntb.call()\
-            .getGateAddress(decode_hex(self._address))
+        return self._gntb.functions\
+            .getGateAddress(self._address).call({'from': self._address})
 
     def transfer_from_gate(self) -> str:
         return self._create_and_send_transaction(
@@ -486,7 +486,7 @@ class SCIImplementation(SmartContractsInterface):
         return self._create_and_send_transaction(
             self._gntb,
             'withdrawTo',
-            [amount, decode_hex(to_address)],
+            [amount, to_address],
             self.GAS_WITHDRAW,
         )
 
@@ -520,12 +520,15 @@ class SCIImplementation(SmartContractsInterface):
             provider_address: str,
             from_block: int,
             to_block: int) -> List[ForcedSubtaskPaymentEvent]:
-        filter_id = self._gntdeposit.on(
-            'ReimburseForSubtask',
-            from_block,
-            to_block,
-            {'_requestor': requestor_address, '_provider': provider_address},
-        )
+        filter_id = \
+            self._gntdeposit.events.ReimburseForSubtask.createFilter(
+                fromBlock=from_block,
+                toBlock=to_block,
+                argument_filters={
+                    '_requestor': requestor_address,
+                    '_provider': provider_address,
+                },
+            ).filter_id
         logs = self._geth_client.get_filter_logs(filter_id)
 
         return [ForcedSubtaskPaymentEvent(raw_log) for raw_log in logs]
@@ -545,7 +548,7 @@ class SCIImplementation(SmartContractsInterface):
         return self._create_and_send_transaction(
             self._gntdeposit,
             'withdraw',
-            [decode_hex(self._address)],
+            [self._address],
             self.GAS_WITHDRAW_DEPOSIT,
         )
 
@@ -568,12 +571,15 @@ class SCIImplementation(SmartContractsInterface):
             provider_address: str,
             from_block: int,
             to_block: int) -> List[ForcedPaymentEvent]:
-        filter_id = self._gntdeposit.on(
-            'ReimburseForNoPayment',
-            from_block,
-            to_block,
-            {'_requestor': requestor_address, '_provider': provider_address},
-        )
+        filter_id = self._gntdeposit.events.ReimburseForNoPayment.\
+            createFilter(
+                fromBlock=from_block,
+                toBlock=to_block,
+                argument_filters={
+                    '_requestor': requestor_address,
+                    '_provider': provider_address,
+                },
+            ).filter_id
         logs = self._geth_client.get_filter_logs(filter_id)
 
         return [ForcedPaymentEvent(raw_log) for raw_log in logs]
@@ -595,9 +601,11 @@ class SCIImplementation(SmartContractsInterface):
     def get_deposit_value(
             self,
             account_address: str) -> Optional[int]:
-        return self._gntdeposit.call().balanceOf(decode_hex(account_address))
+        return self._gntdeposit.functions\
+            .balanceOf(account_address).call({'from': self._address})
 
     def get_deposit_locked_until(
             self,
             account_address: str) -> Optional[int]:
-        return self._gntdeposit.call().getTimelock(decode_hex(account_address))
+        return self._gntdeposit.functions.\
+            getTimelock(account_address).call({'from': self._address})

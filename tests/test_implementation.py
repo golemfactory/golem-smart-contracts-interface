@@ -2,6 +2,9 @@ import json
 import unittest.mock as mock
 import unittest
 
+from eth_utils import to_checksum_address
+from hexbytes import HexBytes
+
 from golem_sci import chains
 from golem_sci.client import FilterNotFoundException
 from golem_sci.contracts.provider import ContractDataProvider
@@ -11,7 +14,7 @@ from golem_sci.contracts.data.rinkeby.golemnetworktokenbatching import ADDRESS \
 
 
 def get_eth_address():
-    return '0xadd355' + '0' * 34
+    return to_checksum_address('0xadd355' + '0' * 34)
 
 
 class SCIImplementationTest(unittest.TestCase):
@@ -23,22 +26,18 @@ class SCIImplementationTest(unittest.TestCase):
             ret = mock.Mock()
             ret.abi = json.loads(abi)
             ret.address = addr
+            self.contracts[addr] = ret
             return ret
         self.sign_tx = mock.Mock()
         self.geth_client.contract.side_effect = client_contract
         self.geth_client.get_gas_price.return_value = 10 ** 9
-        with mock.patch('golem_sci.implementation.ContractWrapper') as contract:
-            def wrapper_factory(actor_address, c):
-                res = mock.Mock()
-                self.contracts[c.address] = res
-                return res
-            contract.side_effect = wrapper_factory
-            self.sci = SCIImplementation(
-                self.geth_client,
-                get_eth_address(),
-                ContractDataProvider(chains.RINKEBY),
-                self.sign_tx,
-                monitor=False)
+
+        self.sci = SCIImplementation(
+            self.geth_client,
+            get_eth_address(),
+            ContractDataProvider(chains.RINKEBY),
+            self.sign_tx,
+            monitor=False)
         self.gntb = self.contracts[GNTBAddress]
 
     def test_eth_address(self):
@@ -65,8 +64,8 @@ class SCIImplementationTest(unittest.TestCase):
         self.geth_client.reset_mock()
 
     def test_subscribe_to_incoming_batch_transfers(self):
-        receiver_address = '0x' + 'f' * 40
-        sender_address = '0x' + 'e' * 40
+        receiver_address = to_checksum_address('0x' + 'f' * 40)
+        sender_address = to_checksum_address('0x' + 'e' * 40)
         tx_hashes = ['0x' + 39 * '0' + str(i) for i in range(1, 10)]
         required_confs = 2
         block_number = 100
@@ -75,7 +74,8 @@ class SCIImplementationTest(unittest.TestCase):
         filter_id = '0x3'
         events = []
 
-        self.gntb.on.return_value = filter_id
+        self.gntb.events.BatchTransfer.createFilter.return_value = \
+            mock.Mock(filter_id=filter_id)
         self.geth_client.get_filter_logs.return_value = []
         self.sci.subscribe_to_incoming_batch_transfers(
             receiver_address,
@@ -84,23 +84,22 @@ class SCIImplementationTest(unittest.TestCase):
             required_confs,
         )
 
-        self.gntb.on.assert_called_once_with(
-            'BatchTransfer',
-            from_block,
-            'latest',
-            {'to': receiver_address},
+        self.gntb.events.BatchTransfer.createFilter.assert_called_once_with(
+            fromBlock=from_block,
+            toBlock='latest',
+            argument_filters={'to': receiver_address},
         )
         self.geth_client.get_filter_logs.assert_called_once_with(filter_id)
 
         self.geth_client.get_filter_changes.return_value = [
             {
                 'removed': False,
-                'transactionHash': tx_hash,
+                'transactionHash': HexBytes(tx_hash),
                 'blockNumber': block_number,
                 'topics': [
                     '',
-                    '0x' + '0' * 24 + sender_address[2:],
-                    '0x' + '0' * 24 + receiver_address[2:],
+                    HexBytes('0x' + '0' * 24 + sender_address[2:]),
+                    HexBytes('0x' + '0' * 24 + receiver_address[2:]),
                 ],
                 'data': data,
             } for tx_hash in tx_hashes
@@ -131,17 +130,17 @@ class SCIImplementationTest(unittest.TestCase):
         self.geth_client.get_filter_changes.reset_mock()
         self.geth_client.get_filter_changes.side_effect = \
             FilterNotFoundException()
-        self.gntb.on.reset_mock()
-        self.gntb.on.return_value = new_filter_id
+        self.gntb.events.BatchTransfer.createFilter.reset_mock()
+        self.gntb.events.BatchTransfer.createFilter.return_value = \
+            mock.Mock(filter_id=new_filter_id)
         self.geth_client.get_filter_logs.reset_mock()
 
         self.sci._monitor_blockchain_single()
 
-        self.gntb.on.assert_called_once_with(
-            'BatchTransfer',
-            block_number + required_confs,
-            'latest',
-            {'to': receiver_address},
+        self.gntb.events.BatchTransfer.createFilter.assert_called_once_with(
+            fromBlock=block_number + required_confs,
+            toBlock='latest',
+            argument_filters={'to': receiver_address},
         )
         self.geth_client.get_filter_logs.assert_called_once_with(
             new_filter_id,
@@ -149,8 +148,8 @@ class SCIImplementationTest(unittest.TestCase):
         assert 0 == len(events)
 
     def test_get_batch_transfers(self):
-        receiver_address = '0x' + 'f' * 40
-        sender_address = '0x' + 'e' * 40
+        receiver_address = to_checksum_address('0x' + 'f' * 40)
+        sender_address = to_checksum_address('0x' + 'e' * 40)
         tx_hash = '0x' + 'a' * 40
         from_block = 10
         to_block = 20
@@ -158,15 +157,16 @@ class SCIImplementationTest(unittest.TestCase):
         filter_id = '0x123'
 
         self.geth_client.get_filter_logs.return_value = [{
-            'transactionHash': tx_hash,
+            'transactionHash': HexBytes(tx_hash),
             'topics': [
                 '',
-                '0x' + '0' * 24 + sender_address[2:],
-                '0x' + '0' * 24 + receiver_address[2:],
+                HexBytes('0x' + '0' * 24 + sender_address[2:]),
+                HexBytes('0x' + '0' * 24 + receiver_address[2:]),
             ],
             'data': data,
         }]
-        self.gntb.on.return_value = filter_id
+        self.gntb.events.BatchTransfer.createFilter.return_value = \
+            mock.Mock(filter_id=filter_id)
 
         events = self.sci.get_batch_transfers(
             sender_address,
@@ -189,7 +189,7 @@ class SCIImplementationTest(unittest.TestCase):
         required_confs = 12
         gas_used = 1234
         block_number = 100
-        block_hash = '0xbbb'
+        block_hash = '0xbbbb'
         receipt = []
 
         def cb(tx_receipt):
@@ -204,11 +204,11 @@ class SCIImplementationTest(unittest.TestCase):
 
         self.geth_client.get_block_number.return_value = block_number
         self.geth_client.get_transaction_receipt.return_value = {
-            'transactionHash': tx_hash,
+            'transactionHash': HexBytes(tx_hash),
             'status': 1,
             'gasUsed': gas_used,
             'blockNumber': block_number,
-            'blockHash': block_hash,
+            'blockHash': HexBytes(block_hash),
         }
         self.sci._monitor_blockchain_single()
         assert not receipt

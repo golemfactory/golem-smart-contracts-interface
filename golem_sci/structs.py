@@ -16,10 +16,10 @@ class Block:
 
 
 class TransactionReceipt:
-    def __init__(self, raw_receipt: Dict[str, Any]):
-        self.tx_hash: str = raw_receipt['transactionHash']
+    def __init__(self, raw_receipt: Dict[str, Any]) -> None:
+        self.tx_hash: str = raw_receipt['transactionHash'].hex()
         self.status: bool = raw_receipt['status'] == 1
-        self.block_hash: str = raw_receipt['blockHash']
+        self.block_hash: str = raw_receipt['blockHash'].hex()
         self.block_number: int = raw_receipt['blockNumber']
         self.gas_used: int = raw_receipt['gasUsed']
 

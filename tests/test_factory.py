@@ -1,6 +1,8 @@
 import unittest.mock as mock
 import unittest
 
+from hexbytes import HexBytes
+
 from golem_sci import new_sci
 from golem_sci.chains import RINKEBY
 from golem_sci.factory import (
@@ -27,7 +29,8 @@ class SCIImplementationTest(unittest.TestCase):
             pass
         sci_init.return_value = None
         eth_address = '0xdeafbeef'
-        web3 = mock.Mock()
+        web3 = mock.MagicMock()
+        web3.middleware_stack.__iter__.return_value = []
 
         new_sci(web3, eth_address, tx_sign, chain=RINKEBY)
         ensure_connection.assert_called_once_with(web3)
@@ -43,7 +46,7 @@ class SCIImplementationTest(unittest.TestCase):
     def test_ensure_genesis_valid(self):
         web3 = mock.Mock()
         web3.eth.getBlock.return_value = {
-            'hash': GENESES[RINKEBY],
+            'hash': HexBytes(GENESES[RINKEBY]),
         }
         _ensure_genesis(web3, RINKEBY)
         web3.eth.getBlock.assert_called_once_with(0)
@@ -51,9 +54,9 @@ class SCIImplementationTest(unittest.TestCase):
     def test_ensure_genesis_invalid(self):
         web3 = mock.Mock()
         web3.eth.getBlock.return_value = {
-            'hash': '0xaaa',
+            'hash': HexBytes('0xaaa'),
         }
-        with self.assertRaises(Exception):
+        with self.assertRaisesRegex(Exception, 'Invalid genesis block'):
             _ensure_genesis(web3, RINKEBY)
         web3.eth.getBlock.assert_called_once_with(0)
 
@@ -66,7 +69,7 @@ class SCIImplementationTest(unittest.TestCase):
         web3.isConnected.reset_mock()
         web3.isConnected.return_value = False
         with mock.patch('time.sleep'):
-            with self.assertRaises(Exception):
+            with self.assertRaisesRegex(Exception, 'Could not connect'):
                 _ensure_connection(web3)
         assert web3.isConnected.call_count > 1
 
@@ -77,5 +80,5 @@ class SCIImplementationTest(unittest.TestCase):
         _ensure_geth_version(web3)
 
         web3.version.node = 'Geth/v1.0.0'
-        with self.assertRaises(Exception):
+        with self.assertRaisesRegex(Exception, 'Incompatible geth version'):
             _ensure_geth_version(web3)
