@@ -51,12 +51,9 @@ def new_sci(
         chain: str=chains.RINKEBY) -> SmartContractsInterface:
     # Web3 needs this extra middleware to properly handle rinkeby chain because
     # rinkeby is POA which violates some invariants
-    if chain == chains.RINKEBY and 'geth_rinkeby' not in web3.middleware_stack:
-        web3.middleware_stack.inject(
-            geth_poa_middleware,
-            layer=0,
-            name='geth_rinkeby',
-        )
+    if chain == chains.RINKEBY and \
+            geth_poa_middleware not in web3.middleware_stack:
+        web3.middleware_stack.inject(geth_poa_middleware, layer=0)
     _ensure_connection(web3)
     _ensure_geth_version(web3)
     _ensure_genesis(web3, chain)
