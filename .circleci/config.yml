@@ -17,27 +17,25 @@ jobs:
           command: |
             apt-get install -y software-properties-common
             add-apt-repository -y ppa:ethereum/ethereum
+            add-apt-repository -y ppa:jonathonf/python-3.6
             apt-get update
             apt-get install -y ethereum
             apt-get install -y libgmp3-dev
-            apt-get install -y python3
-            apt-get install -y python3-dev
-            apt-get install -y python3-venv
-            apt-get install -y python3-setuptools
+            apt-get install -y python3.6 python3.6-dev python3.6-venv
             apt-get install -y pandoc
             apt-get install -y g++
             apt-get install -y build-essential libssl-dev python-dev
             apt-get install -y automake pkg-config libtool libffi-dev libgmp-dev
       - run:
           command: |
-            python3 -m venv venv
+            python3.6 -m venv venv
             . venv/bin/activate
             pip install --upgrade 'pip<10'
             pip install web3==4.2.1
       - run:
           command: |
             . venv/bin/activate
-            python3 setup.py test
+            python setup.py test
       - save_cache:
           key: deps1-{{ .Branch }}-{{ checksum "setup.py" }}
           paths:
