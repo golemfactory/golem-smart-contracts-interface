@@ -1,5 +1,6 @@
 import unittest.mock as mock
 import unittest
+from pathlib import Path
 
 from hexbytes import HexBytes
 
@@ -14,7 +15,7 @@ from golem_sci.factory import (
 )
 
 
-class SCIImplementationTest(unittest.TestCase):
+class FactoryTest(unittest.TestCase):
     @mock.patch('golem_sci.factory._ensure_connection')
     @mock.patch('golem_sci.factory._ensure_geth_version')
     @mock.patch('golem_sci.factory._ensure_genesis')
@@ -31,14 +32,17 @@ class SCIImplementationTest(unittest.TestCase):
         eth_address = '0xdeafbeef'
         web3 = mock.MagicMock()
         web3.middleware_stack.__iter__.return_value = []
+        datadir = Path('/nonexistent')
 
-        new_sci(web3, eth_address, tx_sign, chain=RINKEBY)
+        with mock.patch('golem_sci.factory.JsonTransactionsStorage'):
+            new_sci(datadir, web3, eth_address, tx_sign, chain=RINKEBY)
         ensure_connection.assert_called_once_with(web3)
         ensure_geth_version.assert_called_once_with(web3)
         ensure_genesis.assert_called_once_with(web3, RINKEBY)
         sci_init.assert_called_once_with(
             mock.ANY,
             eth_address,
+            mock.ANY,
             mock.ANY,
             tx_sign,
         )

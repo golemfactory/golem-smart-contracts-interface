@@ -31,10 +31,16 @@ class SCIImplementationTest(unittest.TestCase):
         self.sign_tx = mock.Mock()
         self.geth_client.contract.side_effect = client_contract
         self.geth_client.get_gas_price.return_value = 10 ** 9
+        self.geth_client.get_block_number.return_value = 1
+        self.geth_client.get_balance.return_value = 10 ** 20
+        self.storage = mock.Mock()
+        self.storage.get_all_tx.return_value = []
+        self.storage.get_nonce.return_value = 0
 
         self.sci = SCIImplementation(
             self.geth_client,
             get_eth_address(),
+            self.storage,
             ContractDataProvider(chains.RINKEBY),
             self.sign_tx,
             monitor=False)
@@ -67,7 +73,6 @@ class SCIImplementationTest(unittest.TestCase):
         receiver_address = to_checksum_address('0x' + 'f' * 40)
         sender_address = to_checksum_address('0x' + 'e' * 40)
         tx_hashes = ['0x' + 39 * '0' + str(i) for i in range(1, 10)]
-        required_confs = 2
         block_number = 100
         from_block = 10
         data = '0x00000000000000000000000000000000000000000000000002501e734690aaab000000000000000000000000000000000000000000000000000000005a6af820'  # noqa
@@ -81,7 +86,6 @@ class SCIImplementationTest(unittest.TestCase):
             receiver_address,
             from_block,
             lambda e: events.append(e),
-            required_confs,
         )
 
         self.gntb.events.BatchTransfer.createFilter.assert_called_once_with(
@@ -111,7 +115,7 @@ class SCIImplementationTest(unittest.TestCase):
 
         self.geth_client.get_filter_changes.return_value = []
         self.geth_client.get_block_number.return_value = \
-            block_number + required_confs
+            block_number + self.sci.REQUIRED_CONFS
         self.sci._monitor_blockchain_single()
         assert len(tx_hashes) == len(events)
         for i, tx_hash in enumerate(tx_hashes):
@@ -138,7 +142,7 @@ class SCIImplementationTest(unittest.TestCase):
         self.sci._monitor_blockchain_single()
 
         self.gntb.events.BatchTransfer.createFilter.assert_called_once_with(
-            fromBlock=block_number + required_confs,
+            fromBlock=block_number + self.sci.REQUIRED_CONFS,
             toBlock='latest',
             argument_filters={'to': receiver_address},
         )
@@ -147,46 +151,8 @@ class SCIImplementationTest(unittest.TestCase):
         )
         assert 0 == len(events)
 
-    def test_get_batch_transfers(self):
-        receiver_address = to_checksum_address('0x' + 'f' * 40)
-        sender_address = to_checksum_address('0x' + 'e' * 40)
-        tx_hash = '0x' + 'a' * 40
-        from_block = 10
-        to_block = 20
-        data = '0x00000000000000000000000000000000000000000000000002501e734690aaab000000000000000000000000000000000000000000000000000000005a6af820'  # noqa
-        filter_id = '0x123'
-
-        self.geth_client.get_filter_logs.return_value = [{
-            'transactionHash': HexBytes(tx_hash),
-            'topics': [
-                '',
-                HexBytes('0x' + '0' * 24 + sender_address[2:]),
-                HexBytes('0x' + '0' * 24 + receiver_address[2:]),
-            ],
-            'data': data,
-        }]
-        self.gntb.events.BatchTransfer.createFilter.return_value = \
-            mock.Mock(filter_id=filter_id)
-
-        events = self.sci.get_batch_transfers(
-            sender_address,
-            receiver_address,
-            from_block,
-            to_block,
-        )
-        self.geth_client.get_filter_logs.assert_called_once_with(
-            filter_id,
-        )
-        assert 1 == len(events)
-        assert tx_hash == events[0].tx_hash
-        assert sender_address == events[0].sender
-        assert receiver_address == events[0].receiver
-        assert 166666666666666667 == events[0].amount
-        assert 1516959776 == events[0].closure_time
-
     def test_on_transaction_confirmed(self):
         tx_hash = '0x' + 'a' * 40
-        required_confs = 12
         gas_used = 1234
         block_number = 100
         block_hash = '0xbbbb'
@@ -195,7 +161,7 @@ class SCIImplementationTest(unittest.TestCase):
         def cb(tx_receipt):
             receipt.append(tx_receipt)
 
-        self.sci.on_transaction_confirmed(tx_hash, required_confs, cb)
+        self.sci.on_transaction_confirmed(tx_hash, cb)
 
         self.geth_client.get_block_number.return_value = block_number - 1
         self.geth_client.get_transaction_receipt.return_value = None
@@ -214,12 +180,12 @@ class SCIImplementationTest(unittest.TestCase):
         assert not receipt
 
         self.geth_client.get_block_number.return_value = \
-            block_number + required_confs - 1
+            block_number + self.sci.REQUIRED_CONFS - 2
         self.sci._monitor_blockchain_single()
         assert not receipt
 
         self.geth_client.get_block_number.return_value = \
-            block_number + required_confs + 1
+            block_number + self.sci.REQUIRED_CONFS + 1
         self.sci._monitor_blockchain_single()
         assert 1 == len(receipt)
         assert receipt[0].status
@@ -231,32 +197,6 @@ class SCIImplementationTest(unittest.TestCase):
         self.sci._monitor_blockchain_single()
         assert not receipt
 
-    def test_failed_requests(self):
-        self.geth_client.get_transaction_count.return_value = 0
-        self.geth_client.send.side_effect = Exception
-        tx_hash = self.sci.transfer_eth('0x' + 40 * 'a', 123)
-
-        assert type(tx_hash) == str
-        assert len(tx_hash) == 66
-        self.geth_client.get_transaction.return_value = None
-        self.sci._monitor_blockchain_single()
-        self.geth_client.get_transaction.assert_called_once_with(tx_hash)
-        self.geth_client.get_transaction.reset_mock()
-
-        self.geth_client.get_transaction.side_effect = Exception
-        self.sci._monitor_blockchain_single()
-        self.geth_client.get_transaction.assert_called_once_with(tx_hash)
-        self.geth_client.get_transaction.side_effect = None
-        self.geth_client.get_transaction.reset_mock()
-
-        self.geth_client.get_transaction.return_value = mock.Mock()
-        self.sci._monitor_blockchain_single()
-        self.geth_client.get_transaction.assert_called_once_with(tx_hash)
-        self.geth_client.get_transaction.reset_mock()
-
-        self.sci._monitor_blockchain_single()
-        self.geth_client.get_transaction.assert_not_called()
-
     def test_missing_contracts(self):
         provider = mock.Mock()
         provider.get_address.return_value = Exception('missing')
@@ -265,6 +205,7 @@ class SCIImplementationTest(unittest.TestCase):
         sci = SCIImplementation(
             self.geth_client,
             get_eth_address(),
+            self.storage,
             provider,
             monitor=False,
         )

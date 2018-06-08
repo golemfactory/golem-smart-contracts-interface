@@ -29,23 +29,23 @@ class SmartContractsInterface(object, metaclass=abc.ABCMeta):
         pass
 
     @abc.abstractmethod
-    def get_eth_balance(self, address: str) -> Optional[int]:
+    def get_eth_balance(self, address: str) -> int:
         """
-        Returns eth balance in wei or None is case of issues.
-        """
-        pass
-
-    @abc.abstractmethod
-    def get_gnt_balance(self, address: str) -> Optional[int]:
-        """
-        Returns GNT balance in wei or None is case of issues.
+        Returns eth balance in wei.
         """
         pass
 
     @abc.abstractmethod
-    def get_gntb_balance(self, address: str) -> Optional[int]:
+    def get_gnt_balance(self, address: str) -> int:
         """
-        Returns GNTB balance in wei or None is case of issues.
+        Returns GNT balance in wei.
+        """
+        pass
+
+    @abc.abstractmethod
+    def get_gntb_balance(self, address: str) -> int:
+        """
+        Returns GNTB balance in wei.
         """
         pass
 
@@ -80,8 +80,7 @@ class SmartContractsInterface(object, metaclass=abc.ABCMeta):
             self,
             address: str,
             from_block: int,
-            cb: Callable[[BatchTransferEvent], None],
-            required_confs: int) -> None:
+            cb: Callable[[BatchTransferEvent], None]) -> None:
         """
         Every time a BatchTransfer event happens callback will be called
         if the recipient equals to the input address and the block has been
@@ -93,7 +92,6 @@ class SmartContractsInterface(object, metaclass=abc.ABCMeta):
     def on_transaction_confirmed(
             self,
             tx_hash: str,
-            required_confs: int,
             cb: Callable[[TransactionReceipt], None]) -> None:
         """
         Will invoke callback after the transaction has been confirmed
@@ -153,12 +151,15 @@ class SmartContractsInterface(object, metaclass=abc.ABCMeta):
     # Transaction
     @abc.abstractmethod
     def open_gate(self) -> str:
+        """
+        Creates the gate required for GNT-GNTB conversion.
+        """
         pass
 
     @abc.abstractmethod
-    def get_gate_address(self) -> str:
+    def get_gate_address(self) -> Optional[str]:
         """
-        Returns Ethereum address
+        Returns Ethereum address of the gate or None if it doesn't exist yet.
         """
         pass
 
@@ -166,7 +167,7 @@ class SmartContractsInterface(object, metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def transfer_from_gate(self) -> str:
         """
-        Final step which convert the value of the gate to GNTB
+        Final step which convert the value of the gate to GNTB.
         """
         pass
 

@@ -27,6 +27,8 @@ from .factory import (  # noqa
     new_sci_rpc,
 )
 
+from .gntconverter import GNTConverter  # noqa
+
 from .structs import (  # noqa
     Block,
     Payment,

@@ -103,11 +103,7 @@ class Client(object):
         set with web3.eth.defaultBlock
         :return: Balance
         """
-        try:
-            return self.web3.eth.getBalance(account, block)
-        except ValueError as e:
-            logger.error("Ethereum RPC: {}".format(e))
-            return None
+        return self.web3.eth.getBalance(account, block)
 
     def get_gas_price(self) -> int:
         return self.web3.eth.gasPrice

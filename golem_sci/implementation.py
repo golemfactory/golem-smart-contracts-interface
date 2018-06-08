@@ -1,9 +1,9 @@
 import logging
 import threading
 import time
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, ClassVar, Dict, List, Optional, Tuple
 
-from ethereum.utils import zpad, int_to_big_endian
+from ethereum.utils import zpad, int_to_big_endian, denoms
 from ethereum.transactions import Transaction
 from eth_utils import decode_hex, encode_hex
 
@@ -21,6 +21,7 @@ from .structs import (
     Payment,
     TransactionReceipt,
 )
+from .transactionsstorage import TransactionsStorage
 
 logger = logging.getLogger(__name__)
 
@@ -37,16 +38,27 @@ def encode_payment(p: Payment) -> bytes:
     return pair
 
 
+# web3 just throws ValueError(response['error']) and this is the best we can
+# do to check whether this is coming from there
+def _is_jsonrpc_error(e: Exception) -> bool:
+    if not isinstance(e, ValueError):
+        return False
+    if len(e.args) != 1:
+        return False
+    arg = e.args[0]
+    if not isinstance(arg, dict):
+        return False
+    return len(arg) == 2 and 'message' in arg and 'code' in arg
+
+
 class SubscriptionFilter:
     def __init__(
             self,
             address: str,
             cb,
-            required_confs: int,
             from_block: int) -> None:
         self.address = address
         self.cb = cb
-        self.required_confs = required_confs
         self.last_pulled_block = from_block
 
 
@@ -69,10 +81,13 @@ class SCIImplementation(SmartContractsInterface):
     GAS_FORCE_PAYMENT = 80000
     GAS_WITHDRAW_DEPOSIT = 75000
 
+    REQUIRED_CONFS: ClassVar[int] = 6
+
     def __init__(
             self,
             geth_client: Client,
             address: str,
+            storage: TransactionsStorage,
             contract_data_provider,
             tx_sign=None,
             monitor=True) -> None:
@@ -86,6 +101,7 @@ class SCIImplementation(SmartContractsInterface):
         """
         self._geth_client = geth_client
         self._address = address
+        self._storage = storage
         self._tx_sign = tx_sign
 
         def _make_contract(contract: str):
@@ -98,11 +114,10 @@ class SCIImplementation(SmartContractsInterface):
                 logger.warning("Unable to use `%s` contract: %r", contract, e)
                 return None
 
-        self._gntb = _make_contract(contracts.GolemNetworkTokenBatching)
         self._gnt = _make_contract(contracts.GolemNetworkToken)
-        self._faucet = _make_contract(contracts.Faucet)
+        self._gntb = _make_contract(contracts.GolemNetworkTokenBatching)
         self._gntdeposit = _make_contract(contracts.GNTDeposit)
-        self._gntpaymentchannels = _make_contract(contracts.GNTPaymentChannels)
+        self._faucet = _make_contract(contracts.Faucet)
 
         self._subs_lock = threading.Lock()
         self._subscriptions: Dict[str, SubscriptionFilter] = {}
@@ -113,37 +128,41 @@ class SCIImplementation(SmartContractsInterface):
         self._awaiting_transactions_lock = threading.Lock()
         self._awaiting_transactions: List[Tuple] = []
 
-        self._failed_tx_requests_lock = threading.Lock()
-        self._failed_tx_requests: List[Transaction] = []
+        self._update_gas_price()
+        self._update_block_numbers()
+
+        self._eth_reserved_lock = threading.Lock()
+        self._eth_reserved = 0
+        for tx in self._storage.get_all_tx():
+            self._eth_reserved += tx.startgas * tx.gasprice + tx.value
 
         self._monitor_thread = None
         self._monitor_stop = threading.Event()
-
-        self._update_gas_price()
-
         if monitor:
             self._monitor_thread = threading.Thread(
                 target=self._monitor_blockchain,
-                daemon=True
+                daemon=True,
             )
             self._monitor_thread.start()
 
     def get_eth_address(self) -> str:
         return self._address
 
-    def get_eth_balance(self, address: str) -> Optional[int]:
-        """
-        Returns None is case of issues coming from the geth client
-        """
-        return self._geth_client.get_balance(address)
+    def get_eth_balance(self, address: str) -> int:
+        balance = self._geth_client.get_balance(
+            address,
+            block=self._confirmed_block,
+        )
+        if address == self._address:
+            with self._eth_reserved_lock:
+                balance -= self._eth_reserved
+        return balance
 
-    def get_gnt_balance(self, address: str) -> Optional[int]:
-        return self._gnt.functions.\
-            balanceOf(address).call({'from': self._address})
+    def get_gnt_balance(self, address: str) -> int:
+        return self._call(self._gnt.functions.balanceOf(address))
 
-    def get_gntb_balance(self, address: str) -> Optional[int]:
-        return self._gntb.functions.\
-            balanceOf(address).call({'from': self._address})
+    def get_gntb_balance(self, address: str) -> int:
+        return self._call(self._gntb.functions.balanceOf(address))
 
     def batch_transfer(self, payments: List[Payment], closure_time: int) -> str:
         encoded_payments = []
@@ -179,8 +198,7 @@ class SCIImplementation(SmartContractsInterface):
             self,
             address: str,
             from_block: int,
-            cb: Callable[[BatchTransferEvent], None],
-            required_confs: int) -> None:
+            cb: Callable[[BatchTransferEvent], None]) -> None:
         with self._subs_lock:
             filter_id = self._gntb.events.BatchTransfer.createFilter(
                 fromBlock=from_block,
@@ -189,21 +207,19 @@ class SCIImplementation(SmartContractsInterface):
             ).filter_id
             logs = self._geth_client.get_filter_logs(filter_id)
             for log in logs:
-                self._on_filter_log(log, cb, required_confs)
+                self._on_filter_log(log, cb)
             self._subscriptions[filter_id] = SubscriptionFilter(
                 address,
                 cb,
-                required_confs,
                 from_block,
             )
 
     def on_transaction_confirmed(
             self,
             tx_hash: str,
-            required_confs: int,
             cb: Callable[[TransactionReceipt], None]) -> None:
         with self._awaiting_transactions_lock:
-            self._awaiting_transactions.append((tx_hash, required_confs, cb))
+            self._awaiting_transactions.append((tx_hash, cb))
 
     def get_latest_block(self) -> Block:
         return self.get_block_by_number(self.get_block_number())
@@ -219,9 +235,8 @@ class SCIImplementation(SmartContractsInterface):
         if gas_price is None:
             gas_price = self.get_current_gas_price()
 
-        nonce = self._geth_client.get_transaction_count(self.get_eth_address())
         tx = Transaction(
-            nonce=nonce,
+            nonce=self._get_current_nonce(),
             gasprice=gas_price,
             startgas=21000,
             to=to_address,
@@ -259,7 +274,7 @@ class SCIImplementation(SmartContractsInterface):
         )
 
     def get_block_number(self) -> int:
-        return self._geth_client.get_block_number()
+        return self._current_block
 
     def get_transaction_receipt(
             self,
@@ -288,18 +303,45 @@ class SCIImplementation(SmartContractsInterface):
         self._geth_client.stop()
         self._monitor_stop.set()
 
+    def _call(self, method) -> Any:
+        return method.call(
+            {'from': self._address},
+            block_identifier=self._confirmed_block,
+        )
+
+    def _get_current_nonce(self) -> int:
+        return self._storage.get_nonce()
+
     def _sign_and_send_transaction(self, tx: Transaction) -> str:
         self._tx_sign(tx)
+        total_eth = tx.startgas * tx.gasprice + tx.value
+        balance = self.get_eth_balance(self._address)
+        if total_eth > balance:
+            raise Exception(
+                'Not enough ETH for transaction. Has {}, got {}'.format(
+                    balance / denoms.ether,
+                    total_eth / denoms.ether,
+                ))
+        self._storage.put_tx_and_inc_nonce(tx)
         try:
+            with self._eth_reserved_lock:
+                self._eth_reserved += total_eth
             return self._geth_client.send(tx)
-        except ValueError:
-            raise
         except Exception as e:
-            logger.info(
-                "Exception while sending transaction {}, it will be retried {}"
-                .format(tx.hash, e))
-            with self._failed_tx_requests_lock:
-                self._failed_tx_requests.append(tx)
+            if _is_jsonrpc_error(e):
+                # This can be stuff like not enough gas for the transaction.
+                # It shouldn't ever happen and if it does then it's a bug
+                # that should be fixed by the caller.
+                logger.critical('web3 JSON rpc critical error %r', e)
+                with self._eth_reserved_lock:
+                    self._eth_reserved -= total_eth
+                self._storage.revert_last_tx()
+                raise
+            # We don't need to do anything explicitly, it will be retried
+            logger.exception(
+                'Exception while sending transaction, will be retried: %r',
+                e,
+            )
             return encode_hex(tx.hash)
 
     def _create_and_send_transaction(
@@ -312,7 +354,7 @@ class SCIImplementation(SmartContractsInterface):
             'gas': gas_limit,
         })
         tx = Transaction(
-            nonce=self._geth_client.get_transaction_count(self._address),
+            nonce=self._get_current_nonce(),
             gasprice=self.get_current_gas_price(),
             startgas=gas_limit,
             to=raw_tx['to'],
@@ -321,30 +363,33 @@ class SCIImplementation(SmartContractsInterface):
         )
         return self._sign_and_send_transaction(tx)
 
+    def _monitor_blockchain(self):
+        while not self._monitor_stop.is_set():
+            try:
+                self._monitor_blockchain_single()
+            except Exception as e:
+                logger.exception('Blockchain monitor exception: %r', e)
+            time.sleep(15)
+
+    def _monitor_blockchain_single(self):
+        self._update_block_numbers()
+        self._update_gas_price()
+        self._pull_filter_changes()
+        self._process_awaiting_transactions()
+        self._process_sent_transactions()
+
     def _update_gas_price(self) -> None:
         self._gas_price = max(
             self.GAS_PRICE_MIN,
             min(self.GAS_PRICE, self._geth_client.get_gas_price()),
         )
 
-    def _monitor_blockchain(self):
-        while not self._monitor_stop.is_set():
-            try:
-                self._monitor_blockchain_single()
-            except Exception as e:
-                logger.error('Blockchain monitor exception: %r', e)
-            time.sleep(15)
+    def _update_block_numbers(self) -> None:
+        self._current_block = self._geth_client.get_block_number()
+        self._confirmed_block = self._current_block - self.REQUIRED_CONFS + 1
 
-    def _monitor_blockchain_single(self):
-        self.wait_until_synchronized()
-        block_number = self._geth_client.get_block_number()
-        self._update_gas_price()
-        self._pull_changes_from_blockchain(block_number)
-        self._process_awaiting_transactions(block_number)
-        self._retry_failed_transactions()
-
-    def _on_filter_log(self, log, cb, required_confs: int) -> None:
-        tx_hash = log['transactionHash']
+    def _on_filter_log(self, log, cb) -> None:
+        tx_hash = log['transactionHash'].hex()
         if log['removed']:
             del self._awaiting_callbacks[tx_hash]
         else:
@@ -358,19 +403,19 @@ class SCIImplementation(SmartContractsInterface):
             self._awaiting_callbacks[tx_hash] = (
                 lambda: cb_copy(event),
                 self._cb_id,
-                log['blockNumber'] + required_confs,
+                log['blockNumber'],
             )
             self._cb_id += 1
 
-    def _pull_changes_from_blockchain(self, block_number: int) -> None:
+    def _pull_filter_changes(self) -> None:
         with self._subs_lock:
             subs = self._subscriptions.copy()
         for filter_id, sub in subs.items():
             try:
                 logs = self._geth_client.get_filter_changes(filter_id)
                 for log in logs:
-                    self._on_filter_log(log, sub.cb, sub.required_confs)
-                sub.last_pulled_block = block_number
+                    self._on_filter_log(log, sub.cb)
+                sub.last_pulled_block = self._current_block
             except FilterNotFoundException as e:
                 logger.warning('Filter not found error, probably caused by'
                                ' network loss. Recreating.')
@@ -380,7 +425,6 @@ class SCIImplementation(SmartContractsInterface):
                     sub.address,
                     sub.last_pulled_block,
                     sub.cb,
-                    sub.required_confs,
                 )
 
         if self._awaiting_callbacks:
@@ -389,42 +433,42 @@ class SCIImplementation(SmartContractsInterface):
                 self._awaiting_callbacks.items(),
                 key=lambda v: v[1][1],
             )
-            for key, (cb, _, required_block) in chronological_callbacks:
-                if block_number >= required_block:
+            for key, (cb, _, block_number) in chronological_callbacks:
+                if block_number <= self._confirmed_block:
                     try:
                         logger.info(
-                            'Incoming batch transfer confirmed %r',
+                            'Incoming batch transfer confirmed %s',
                             key,
                         )
                         cb()
                     except Exception as e:
-                        logger.error('Tx callback exception: %r', e)
+                        logger.exception('Tx callback exception: %r', e)
                     to_remove.append(key)
 
             for key in to_remove:
                 del self._awaiting_callbacks[key]
 
-    def _process_awaiting_transactions(self, block_number: int) -> None:
+    def _process_awaiting_transactions(self) -> None:
         with self._awaiting_transactions_lock:
             awaiting_transactions = self._awaiting_transactions
             self._awaiting_transactions = []
 
         def processed(awaiting_tx) -> bool:
-            tx_hash, required_confs, cb = awaiting_tx
+            tx_hash, cb = awaiting_tx
             receipt = self.get_transaction_receipt(tx_hash)
             if not receipt:
                 return False
-            if receipt.block_number + required_confs < block_number:
-                try:
-                    cb(receipt)
-                except Exception as e:
-                    logger.error(
-                        'Confirmed transaction %r callback error: %r',
-                        tx_hash,
-                        e,
-                    )
-                return True
-            return False
+            if receipt.block_number > self._confirmed_block:
+                return False
+            try:
+                cb(receipt)
+            except Exception as e:
+                logger.exception(
+                    'Confirmed transaction %r callback error: %r',
+                    tx_hash,
+                    e,
+                )
+            return True
 
         remaining_awaiting_transactions = \
             [tx for tx in awaiting_transactions if not processed(tx)]
@@ -432,31 +476,30 @@ class SCIImplementation(SmartContractsInterface):
         with self._awaiting_transactions_lock:
             self._awaiting_transactions.extend(remaining_awaiting_transactions)
 
-    def _retry_failed_transactions(self) -> None:
-        with self._failed_tx_requests_lock:
-            transactions = self._failed_tx_requests[:]
+    def _process_sent_transactions(self) -> None:
+        transactions = self._storage.get_all_tx()
 
-        successful_tx = set()
         for tx in transactions:
             try:
-                tx_res = self._geth_client.get_transaction(encode_hex(tx.hash))
-                if tx_res is None:
-                    logger.info('Retrying transaction %r', tx.hash)
-                    self._geth_client.send(tx)
+                tx_hash = encode_hex(tx.hash)
+                receipt = self.get_transaction_receipt(tx_hash)
+                if receipt:
+                    if receipt.block_number <= self._confirmed_block:
+                        self._storage.remove_tx(tx.nonce)
+                        with self._eth_reserved_lock:
+                            self._eth_reserved -= \
+                                tx.value + tx.gasprice * tx.startgas
                 else:
-                    successful_tx.add(tx.hash)
+                    tx_res = self._geth_client.get_transaction(tx_hash)
+                    if tx_res is None:
+                        logger.info('Resending transaction %r', tx_hash)
+                        self._geth_client.send(tx)
             except Exception as e:
-                logger.error(
-                    "Exception while sending transaction %r: %r",
-                    tx.hash,
+                logger.exception(
+                    "Exception while processing transaction %s: %r",
+                    tx_hash,
                     e,
                 )
-
-        with self._failed_tx_requests_lock:
-            self._failed_tx_requests = [
-                tx for tx in self._failed_tx_requests
-                if tx.hash not in successful_tx
-            ]
 
     ########################
     # GNT-GNTB conversions #
@@ -470,9 +513,11 @@ class SCIImplementation(SmartContractsInterface):
             self.GAS_OPEN_GATE,
         )
 
-    def get_gate_address(self) -> str:
-        return self._gntb.functions\
-            .getGateAddress(self._address).call({'from': self._address})
+    def get_gate_address(self) -> Optional[str]:
+        addr = self._call(self._gntb.functions.getGateAddress(self._address))
+        if addr and int(addr, 16) == 0:
+            return None
+        return addr
 
     def transfer_from_gate(self) -> str:
         return self._create_and_send_transaction(
@@ -601,11 +646,10 @@ class SCIImplementation(SmartContractsInterface):
     def get_deposit_value(
             self,
             account_address: str) -> Optional[int]:
-        return self._gntdeposit.functions\
-            .balanceOf(account_address).call({'from': self._address})
+        return self._call(self._gntdeposit.functions.balanceOf(account_address))
 
     def get_deposit_locked_until(
             self,
             account_address: str) -> Optional[int]:
-        return self._gntdeposit.functions.\
-            getTimelock(account_address).call({'from': self._address})
+        return self._call(
+            self._gntdeposit.functions.getTimelock(account_address))
