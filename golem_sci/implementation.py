@@ -238,7 +238,7 @@ class SCIImplementation(SmartContractsInterface):
         tx = Transaction(
             nonce=self._get_current_nonce(),
             gasprice=gas_price,
-            startgas=21000,
+            startgas=self.estimate_transfer_eth_gas(to_address, amount),
             to=to_address,
             value=amount,
             data=b'',

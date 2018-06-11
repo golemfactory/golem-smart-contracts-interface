@@ -582,6 +582,7 @@ class IntegrationTest(TestCase):
         assert len(self.user_sci._storage.get_all_tx()) == 0
         self.proc.kill()
         self.user_sci.get_eth_balance = mock.Mock(return_value=9 * denoms.ether)
+        self.user_sci.estimate_transfer_eth_gas = mock.Mock(return_value=21000)
         self.user_sci.transfer_eth(ZERO_ADDR, 1)
         assert len(self.user_sci._storage.get_all_tx()) == 1
         self._spawn_geth_process()

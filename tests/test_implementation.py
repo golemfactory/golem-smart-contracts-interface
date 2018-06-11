@@ -33,6 +33,7 @@ class SCIImplementationTest(unittest.TestCase):
         self.geth_client.get_gas_price.return_value = 10 ** 9
         self.geth_client.get_block_number.return_value = 1
         self.geth_client.get_balance.return_value = 10 ** 20
+        self.geth_client.estimate_gas.return_value = 21000
         self.storage = mock.Mock()
         self.storage.get_all_tx.return_value = []
         self.storage.get_nonce.return_value = 0
