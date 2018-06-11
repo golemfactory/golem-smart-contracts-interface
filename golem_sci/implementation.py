@@ -245,6 +245,13 @@ class SCIImplementation(SmartContractsInterface):
         )
         return self._sign_and_send_transaction(tx)
 
+    def estimate_transfer_eth_gas(self, to_address: str, amount: int) -> int:
+        return self._geth_client.estimate_gas({
+            'to': to_address,
+            'from': self._address,
+            'value': amount,
+        })
+
     def transfer_gnt(self, to_address: str, amount: int) -> str:
         return self._create_and_send_transaction(
             self._gnt,

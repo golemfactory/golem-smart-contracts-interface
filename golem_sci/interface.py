@@ -120,6 +120,10 @@ class SmartContractsInterface(object, metaclass=abc.ABCMeta):
             gas_price: Optional[int] = None) -> str:
         pass
 
+    @abc.abstractmethod
+    def estimate_transfer_eth_gas(self, to_address: str, amount: int) -> int:
+        pass
+
     # Transaction
     @abc.abstractmethod
     def transfer_gnt(self, to_address: str, amount: int) -> str:

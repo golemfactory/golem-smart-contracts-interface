@@ -283,6 +283,13 @@ class IntegrationTest(TestCase):
         assert self.user_sci.get_eth_balance(sender) == sender_new_balance
         assert self.user_sci.get_eth_balance(recipient) == amount
 
+    def test_estimate_transfer_eth_gas(self):
+        cost = self.user_sci.estimate_transfer_eth_gas(
+            TEST_RECIPIENT_ADDR,
+            denoms.ether,
+        )
+        assert cost == 21000
+
     def test_not_enough_eth(self):
         balance = self.user_sci.get_eth_balance(self.user_sci.get_eth_address())
         with self.assertRaisesRegex(Exception, 'Not enough ETH'):

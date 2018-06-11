@@ -5,7 +5,7 @@ import rlp
 import time
 from calendar import timegm
 from datetime import datetime
-from typing import Union
+from typing import Any, Dict, Union
 
 from ethereum.utils import zpad
 
@@ -83,6 +83,9 @@ class Client(object):
         :return: number of transactions
         """
         return self.web3.eth.getTransactionCount(address, 'pending')
+
+    def estimate_gas(self, tx: Dict[str, Any]) -> int:
+        return self.web3.eth.estimateGas(tx)
 
     def send(self, transaction) -> str:
         """
