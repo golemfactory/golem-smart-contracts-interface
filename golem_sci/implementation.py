@@ -67,10 +67,10 @@ class SCIImplementation(SmartContractsInterface):
     GAS_PRICE = 20 * 10 ** 9
     GAS_PRICE_MIN = 10 ** 8
 
-    GAS_GNT_TRANSFER = 60000
+    GAS_GNT_TRANSFER = 55000
     GAS_WITHDRAW = 75000
-    GAS_OPEN_GATE = 320000
-    GAS_TRANSFER_FROM_GATE = 110000
+    GAS_OPEN_GATE = 230000
+    GAS_TRANSFER_FROM_GATE = 100000
     GAS_TRANSFER_AND_CALL = 90000
     # Total gas for a batchTransfer is BASE + len(payments) * PER_PAYMENT
     GAS_PER_PAYMENT = 28000
