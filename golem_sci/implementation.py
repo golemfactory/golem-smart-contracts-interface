@@ -325,7 +325,7 @@ class SCIImplementation(SmartContractsInterface):
         balance = self.get_eth_balance(self._address)
         if total_eth > balance:
             raise Exception(
-                'Not enough ETH for transaction. Has {}, got {}'.format(
+                'Not enough ETH for transaction. Got {}, required {}'.format(
                     balance / denoms.ether,
                     total_eth / denoms.ether,
                 ))
