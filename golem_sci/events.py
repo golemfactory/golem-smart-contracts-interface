@@ -33,8 +33,7 @@ class ForcedSubtaskPaymentEvent:
         self.provider: str = \
             to_checksum_address('0x' + raw_log['topics'][2].hex()[26:])
         self.amount: int = int(raw_log['data'][2:66], 16)
-        self.subtask_id: str = \
-            decode_hex(raw_log['data'][66:130]).decode('utf-8').rstrip('\0')
+        self.subtask_id: bytes = decode_hex(raw_log['data'][66:130])
 
 
 class ForcedPaymentEvent:

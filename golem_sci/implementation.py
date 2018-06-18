@@ -54,12 +54,16 @@ def _is_jsonrpc_error(e: Exception) -> bool:
 class SubscriptionFilter:
     def __init__(
             self,
-            from_address: Optional[str],
-            to_address: Optional[str],
+            contract,
+            event_name: str,
+            args: Dict[str, Any],
+            event_cls,
             cb,
             from_block: int) -> None:
-        self.from_address = from_address
-        self.to_address = to_address
+        self.contract = contract
+        self.event_name = event_name
+        self.args = args
+        self.event_cls = event_cls
         self.cb = cb
         self.last_pulled_block = from_block
 
@@ -202,24 +206,17 @@ class SCIImplementation(SmartContractsInterface):
             payee_address: Optional[str],
             from_block: int,
             cb: Callable[[BatchTransferEvent], None]) -> None:
-        filter_id = self._gntb.events.BatchTransfer.createFilter(
-            fromBlock=from_block,
-            toBlock='latest',
-            argument_filters={
+        self._create_subscription(
+            self._gntb,
+            'BatchTransfer',
+            {
                 'from': payer_address,
                 'to': payee_address,
             },
-        ).filter_id
-        logs = self._geth_client.get_filter_logs(filter_id)
-        with self._subs_lock:
-            for log in logs:
-                self._on_filter_log(filter_id, log, cb)
-            self._subscriptions[filter_id] = SubscriptionFilter(
-                payer_address,
-                payee_address,
-                cb,
-                from_block,
-            )
+            BatchTransferEvent,
+            from_block,
+            cb,
+        )
 
     def on_transaction_confirmed(
             self,
@@ -377,6 +374,37 @@ class SCIImplementation(SmartContractsInterface):
         )
         return self._sign_and_send_transaction(tx)
 
+    def _create_subscription(
+            self,
+            contract,
+            event_name: str,
+            args: Dict[str, Any],
+            event_cls,
+            from_block: int,
+            cb: Callable[[Any], None]) -> None:
+        filter_id = contract.events[event_name].createFilter(
+            fromBlock=from_block,
+            toBlock='latest',
+            argument_filters=args,
+        ).filter_id
+        logs = self._geth_client.get_filter_logs(filter_id)
+        with self._subs_lock:
+            for log in logs:
+                self._on_filter_log(
+                    filter_id,
+                    log,
+                    cb,
+                    event_cls,
+                )
+            self._subscriptions[filter_id] = SubscriptionFilter(
+                contract,
+                event_name,
+                args,
+                event_cls,
+                cb,
+                from_block,
+            )
+
     def _monitor_blockchain(self):
         while not self._monitor_stop.is_set():
             try:
@@ -402,18 +430,15 @@ class SCIImplementation(SmartContractsInterface):
         self._current_block = self._geth_client.get_block_number()
         self._confirmed_block = self._current_block - self.REQUIRED_CONFS + 1
 
-    def _on_filter_log(self, filter_id, log, cb) -> None:
+    def _on_filter_log(self, filter_id, log, cb, event_cls) -> None:
         tx_hash = log['transactionHash'].hex()
         event_id = filter_id + tx_hash + str(log['logIndex'])
         if log['removed']:
             del self._awaiting_callbacks[event_id]
         else:
             cb_copy = cb
-            event = BatchTransferEvent(log)
-            logger.info(
-                'Detected batch transfer event %s, waiting for confirmations',
-                event,
-            )
+            event = event_cls(log)
+            logger.info('Detected event %s, waiting for confirmations', event)
 
             self._awaiting_callbacks[event_id] = (
                 lambda: cb_copy(event),
@@ -429,16 +454,18 @@ class SCIImplementation(SmartContractsInterface):
             try:
                 logs = self._geth_client.get_filter_changes(filter_id)
                 for log in logs:
-                    self._on_filter_log(filter_id, log, sub.cb)
+                    self._on_filter_log(filter_id, log, sub.cb, sub.event_cls)
                 sub.last_pulled_block = self._current_block
             except FilterNotFoundException as e:
                 logger.warning('Filter not found error, probably caused by'
                                ' network loss. Recreating.')
                 with self._subs_lock:
                     del self._subscriptions[filter_id]
-                self.subscribe_to_batch_transfers(
-                    sub.from_address,
-                    sub.to_address,
+                self._create_subscription(
+                    sub.contract,
+                    sub.event_name,
+                    sub.args,
+                    sub.event_cls,
                     sub.last_pulled_block,
                     sub.cb,
                 )
@@ -452,7 +479,7 @@ class SCIImplementation(SmartContractsInterface):
             for key, (cb, _, block_number) in chronological_callbacks:
                 if block_number <= self._confirmed_block:
                     try:
-                        logger.info('Batch transfer confirmed %s', key)
+                        logger.info('Event confirmed')
                         cb()
                     except Exception as e:
                         logger.exception('Event callback exception: %r', e)
@@ -557,9 +584,9 @@ class SCIImplementation(SmartContractsInterface):
             requestor_address: str,
             provider_address: str,
             value: int,
-            subtask_id: str) -> str:
-        if len(subtask_id) > 32:
-            raise ValueError('subtask_id cannot be longer than 32 characters')
+            subtask_id: bytes) -> str:
+        if len(subtask_id) != 32:
+            raise ValueError('subtask_id has to be exactly 32 bytes long')
         return self._create_and_send_transaction(
             self._gntdeposit,
             'reimburseForSubtask',
@@ -567,7 +594,7 @@ class SCIImplementation(SmartContractsInterface):
                 requestor_address,
                 provider_address,
                 value,
-                subtask_id.encode('UTF-8'),
+                subtask_id,
             ],
             self.GAS_FORCE_PAYMENT,
         )
@@ -641,6 +668,24 @@ class SCIImplementation(SmartContractsInterface):
         logs = self._geth_client.get_filter_logs(filter_id)
 
         return [ForcedPaymentEvent(raw_log) for raw_log in logs]
+
+    def subscribe_to_forced_subtask_payments(
+            self,
+            requestor_address: Optional[str],
+            provider_address: Optional[str],
+            from_block: int,
+            cb: Callable[[ForcedSubtaskPaymentEvent], None]) -> None:
+        self._create_subscription(
+            self._gntdeposit,
+            'ReimburseForSubtask',
+            {
+                '_requestor': requestor_address,
+                '_provider': provider_address,
+            },
+            ForcedSubtaskPaymentEvent,
+            from_block,
+            cb,
+        )
 
     def cover_additional_verification_cost(
             self,
