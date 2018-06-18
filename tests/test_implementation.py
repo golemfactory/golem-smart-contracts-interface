@@ -70,7 +70,7 @@ class SCIImplementationTest(unittest.TestCase):
         assert self.geth_client.send.call_args[0][0].gasprice == hard_cap
         self.geth_client.reset_mock()
 
-    def test_subscribe_to_incoming_batch_transfers(self):
+    def test_subscribe_to_batch_transfers(self):
         receiver_address = to_checksum_address('0x' + 'f' * 40)
         sender_address = to_checksum_address('0x' + 'e' * 40)
         tx_hashes = ['0x' + 39 * '0' + str(i) for i in range(1, 10)]
@@ -83,7 +83,8 @@ class SCIImplementationTest(unittest.TestCase):
         self.gntb.events.BatchTransfer.createFilter.return_value = \
             mock.Mock(filter_id=filter_id)
         self.geth_client.get_filter_logs.return_value = []
-        self.sci.subscribe_to_incoming_batch_transfers(
+        self.sci.subscribe_to_batch_transfers(
+            None,
             receiver_address,
             from_block,
             lambda e: events.append(e),
@@ -92,7 +93,7 @@ class SCIImplementationTest(unittest.TestCase):
         self.gntb.events.BatchTransfer.createFilter.assert_called_once_with(
             fromBlock=from_block,
             toBlock='latest',
-            argument_filters={'to': receiver_address},
+            argument_filters={'from': None, 'to': receiver_address},
         )
         self.geth_client.get_filter_logs.assert_called_once_with(filter_id)
 
@@ -107,6 +108,7 @@ class SCIImplementationTest(unittest.TestCase):
                     HexBytes('0x' + '0' * 24 + receiver_address[2:]),
                 ],
                 'data': data,
+                'logIndex': 0,
             } for tx_hash in tx_hashes
         ]
         self.geth_client.get_block_number.return_value = block_number
@@ -145,7 +147,7 @@ class SCIImplementationTest(unittest.TestCase):
         self.gntb.events.BatchTransfer.createFilter.assert_called_once_with(
             fromBlock=block_number + self.sci.REQUIRED_CONFS,
             toBlock='latest',
-            argument_filters={'to': receiver_address},
+            argument_filters={'from': None, 'to': receiver_address},
         )
         self.geth_client.get_filter_logs.assert_called_once_with(
             new_filter_id,

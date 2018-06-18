@@ -54,10 +54,12 @@ def _is_jsonrpc_error(e: Exception) -> bool:
 class SubscriptionFilter:
     def __init__(
             self,
-            address: str,
+            from_address: Optional[str],
+            to_address: Optional[str],
             cb,
             from_block: int) -> None:
-        self.address = address
+        self.from_address = from_address
+        self.to_address = to_address
         self.cb = cb
         self.last_pulled_block = from_block
 
@@ -194,22 +196,27 @@ class SCIImplementation(SmartContractsInterface):
 
         return [BatchTransferEvent(raw_log) for raw_log in logs]
 
-    def subscribe_to_incoming_batch_transfers(
+    def subscribe_to_batch_transfers(
             self,
-            address: str,
+            payer_address: Optional[str],
+            payee_address: Optional[str],
             from_block: int,
             cb: Callable[[BatchTransferEvent], None]) -> None:
+        filter_id = self._gntb.events.BatchTransfer.createFilter(
+            fromBlock=from_block,
+            toBlock='latest',
+            argument_filters={
+                'from': payer_address,
+                'to': payee_address,
+            },
+        ).filter_id
+        logs = self._geth_client.get_filter_logs(filter_id)
         with self._subs_lock:
-            filter_id = self._gntb.events.BatchTransfer.createFilter(
-                fromBlock=from_block,
-                toBlock='latest',
-                argument_filters={'to': address},
-            ).filter_id
-            logs = self._geth_client.get_filter_logs(filter_id)
             for log in logs:
-                self._on_filter_log(log, cb)
+                self._on_filter_log(filter_id, log, cb)
             self._subscriptions[filter_id] = SubscriptionFilter(
-                address,
+                payer_address,
+                payee_address,
                 cb,
                 from_block,
             )
@@ -395,19 +402,20 @@ class SCIImplementation(SmartContractsInterface):
         self._current_block = self._geth_client.get_block_number()
         self._confirmed_block = self._current_block - self.REQUIRED_CONFS + 1
 
-    def _on_filter_log(self, log, cb) -> None:
+    def _on_filter_log(self, filter_id, log, cb) -> None:
         tx_hash = log['transactionHash'].hex()
+        event_id = filter_id + tx_hash + str(log['logIndex'])
         if log['removed']:
-            del self._awaiting_callbacks[tx_hash]
+            del self._awaiting_callbacks[event_id]
         else:
             cb_copy = cb
             event = BatchTransferEvent(log)
             logger.info(
-                'Detected incoming batch transfer %s, waiting for confirmation',
+                'Detected batch transfer event %s, waiting for confirmations',
                 event,
             )
 
-            self._awaiting_callbacks[tx_hash] = (
+            self._awaiting_callbacks[event_id] = (
                 lambda: cb_copy(event),
                 self._cb_id,
                 log['blockNumber'],
@@ -421,15 +429,16 @@ class SCIImplementation(SmartContractsInterface):
             try:
                 logs = self._geth_client.get_filter_changes(filter_id)
                 for log in logs:
-                    self._on_filter_log(log, sub.cb)
+                    self._on_filter_log(filter_id, log, sub.cb)
                 sub.last_pulled_block = self._current_block
             except FilterNotFoundException as e:
                 logger.warning('Filter not found error, probably caused by'
                                ' network loss. Recreating.')
                 with self._subs_lock:
                     del self._subscriptions[filter_id]
-                self.subscribe_to_incoming_batch_transfers(
-                    sub.address,
+                self.subscribe_to_batch_transfers(
+                    sub.from_address,
+                    sub.to_address,
                     sub.last_pulled_block,
                     sub.cb,
                 )
@@ -443,13 +452,10 @@ class SCIImplementation(SmartContractsInterface):
             for key, (cb, _, block_number) in chronological_callbacks:
                 if block_number <= self._confirmed_block:
                     try:
-                        logger.info(
-                            'Incoming batch transfer confirmed %s',
-                            key,
-                        )
+                        logger.info('Batch transfer confirmed %s', key)
                         cb()
                     except Exception as e:
-                        logger.exception('Tx callback exception: %r', e)
+                        logger.exception('Event callback exception: %r', e)
                     to_remove.append(key)
 
             for key in to_remove:

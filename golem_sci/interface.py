@@ -76,15 +76,16 @@ class SmartContractsInterface(object, metaclass=abc.ABCMeta):
         pass
 
     @abc.abstractmethod
-    def subscribe_to_incoming_batch_transfers(
+    def subscribe_to_batch_transfers(
             self,
-            address: str,
+            payer_address: Optional[str],
+            payee_address: Optional[str],
             from_block: int,
             cb: Callable[[BatchTransferEvent], None]) -> None:
         """
-        Every time a BatchTransfer event happens callback will be called
-        if the recipient equals to the input address and the block has been
-        confirmed required number of times.
+        For all incoming batch transfers provide just the payee address,
+        for outgoing just the payer address. Can also provide both to subscribe
+        to batch transfers between particular pair of addresses.
         """
         pass
 

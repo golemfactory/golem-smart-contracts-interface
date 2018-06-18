@@ -490,11 +490,19 @@ class IntegrationTest(TestCase):
         payment2 = Payment(payee2, amount2)
 
         from_block = self.user_sci.get_block_number()
-        events = []
-        self.user_sci.subscribe_to_incoming_batch_transfers(
+        events_incoming = []
+        events_outgoing = []
+        self.user_sci.subscribe_to_batch_transfers(
+            None,
             payee1,
             from_block,
-            lambda e: events.append(e),
+            lambda e: events_incoming.append(e),
+        )
+        self.user_sci.subscribe_to_batch_transfers(
+            self.user_sci.get_eth_address(),
+            None,
+            from_block,
+            lambda e: events_outgoing.append(e),
         )
 
         tx_hash = self.user_sci.batch_transfer(
@@ -502,7 +510,8 @@ class IntegrationTest(TestCase):
             closure_time,
         )
         self._wait_for_pending()
-        assert len(events) == 0
+        assert len(events_incoming) == 0
+        assert len(events_outgoing) == 0
         to_block = self.user_sci.get_block_number()
 
         batch_transfers1 = self.user_sci.get_batch_transfers(
@@ -534,12 +543,25 @@ class IntegrationTest(TestCase):
         self._mine_required_blocks()
         assert self.user_sci.get_gntb_balance(payee1) == amount1
         assert self.user_sci.get_gntb_balance(payee2) == amount2
-        assert len(events) == 1
-        assert tx_hash == events[0].tx_hash
-        assert self.user_sci.get_eth_address() == events[0].sender
-        assert payee1 == events[0].receiver
-        assert amount1 == events[0].amount
-        assert closure_time == events[0].closure_time
+
+        assert len(events_incoming) == 1
+        assert tx_hash == events_incoming[0].tx_hash
+        assert self.user_sci.get_eth_address() == events_incoming[0].sender
+        assert payee1 == events_incoming[0].receiver
+        assert amount1 == events_incoming[0].amount
+        assert closure_time == events_incoming[0].closure_time
+
+        assert len(events_outgoing) == 2
+        assert tx_hash == events_outgoing[0].tx_hash
+        assert self.user_sci.get_eth_address() == events_outgoing[0].sender
+        assert payee1 == events_outgoing[0].receiver
+        assert amount1 == events_outgoing[0].amount
+        assert closure_time == events_outgoing[0].closure_time
+        assert tx_hash == events_outgoing[1].tx_hash
+        assert self.user_sci.get_eth_address() == events_outgoing[1].sender
+        assert payee2 == events_outgoing[1].receiver
+        assert amount2 == events_outgoing[1].amount
+        assert closure_time == events_outgoing[1].closure_time
 
     def test_gnt_converter(self):
         addr = self.user_sci.get_eth_address()
