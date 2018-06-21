@@ -293,6 +293,12 @@ class SCIImplementation(SmartContractsInterface):
         raw = self._geth_client.get_transaction_receipt(tx_hash)
         return TransactionReceipt(raw) if raw else None
 
+    def get_transaction_gas_price(
+            self,
+            tx_hash: str) -> Optional[int]:
+        raw = self._geth_client.get_transaction(tx_hash)
+        return raw['gasPrice'] if raw else None
+
     def get_current_gas_price(self) -> int:
         return self._gas_price
 

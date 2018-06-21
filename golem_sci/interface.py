@@ -59,6 +59,12 @@ class SmartContractsInterface(object, metaclass=abc.ABCMeta):
         pass
 
     @abc.abstractmethod
+    def get_transaction_gas_price(
+            self,
+            tx_hash: str) -> Optional[int]:
+        pass
+
+    @abc.abstractmethod
     def get_current_gas_price(self) -> int:
         """
         Returns current gas price that would be used for sending

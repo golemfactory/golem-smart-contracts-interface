@@ -638,3 +638,11 @@ class IntegrationTest(TestCase):
         assert len(self.user_sci._storage.get_all_tx()) == 1
         self._mine_required_blocks()
         assert len(self.user_sci._storage.get_all_tx()) == 0
+
+    def test_get_transaction_gas_price(self):
+        tx_hash_nope = '0x' + 64 * '1'
+        assert self.user_sci.get_transaction_gas_price(tx_hash_nope) is None
+
+        gas_price = 123
+        tx_hash = self.user_sci.transfer_eth(ZERO_ADDR, 1, gas_price=gas_price)
+        assert self.user_sci.get_transaction_gas_price(tx_hash) == gas_price
