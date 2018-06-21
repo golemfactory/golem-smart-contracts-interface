@@ -226,7 +226,7 @@ class SmartContractsInterface(object, metaclass=abc.ABCMeta):
             requestor_address: str,
             provider_address: str,
             value: int,
-            subtask_id: str) -> str:
+            subtask_id: bytes) -> str:
         pass
 
     @abc.abstractmethod
@@ -236,6 +236,15 @@ class SmartContractsInterface(object, metaclass=abc.ABCMeta):
             provider_address: str,
             from_block: int,
             to_block: int) -> List[ForcedSubtaskPaymentEvent]:
+        pass
+
+    @abc.abstractmethod
+    def subscribe_to_forced_subtask_payments(
+            self,
+            requestor_address: Optional[str],
+            provider_address: Optional[str],
+            from_block: int,
+            cb: Callable[[ForcedSubtaskPaymentEvent], None]) -> None:
         pass
 
     # Transaction

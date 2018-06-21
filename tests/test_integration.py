@@ -389,20 +389,28 @@ class IntegrationTest(TestCase):
         requestor = self.user_sci.get_eth_address()
         provider = TEST_RECIPIENT_ADDR
         value = 123
-        subtask_id = 'subtask_id'
+        subtask_id = b'subtask_id' + b'0' * 22
+        events = []
         self.user_sci.deposit_payment(value)
         self._wait_for_pending()
 
         # subtask_id too long
-        with self.assertRaisesRegex(ValueError, 'subtask_id cannot be longer'):
+        with self.assertRaisesRegex(ValueError, 'subtask_id has to be exactly'):
             self.concent_sci.force_subtask_payment(
                 requestor,
                 provider,
                 value,
-                'a' * 33,
+                b'a' * 31,
             )
 
         from_block = self.user_sci.get_block_number()
+        self.user_sci.subscribe_to_forced_subtask_payments(
+            None,
+            provider,
+            from_block,
+            lambda e: events.append(e),
+        )
+
         # user can't force a payment
         tx_hash = self.user_sci.force_subtask_payment(
             requestor,
@@ -437,6 +445,12 @@ class IntegrationTest(TestCase):
         assert forced_payments[0].provider == provider
         assert forced_payments[0].amount == value
         assert forced_payments[0].subtask_id == subtask_id
+
+        assert len(events) == 1
+        assert events[0].requestor == requestor
+        assert events[0].provider == provider
+        assert events[0].amount == value
+        assert events[0].subtask_id == subtask_id
 
     def test_gntb_transfer(self):
         self._create_gntb()

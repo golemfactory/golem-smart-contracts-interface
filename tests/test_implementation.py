@@ -80,7 +80,8 @@ class SCIImplementationTest(unittest.TestCase):
         filter_id = '0x3'
         events = []
 
-        self.gntb.events.BatchTransfer.createFilter.return_value = \
+        self.gntb.events = {'BatchTransfer': mock.Mock()}
+        self.gntb.events['BatchTransfer'].createFilter.return_value = \
             mock.Mock(filter_id=filter_id)
         self.geth_client.get_filter_logs.return_value = []
         self.sci.subscribe_to_batch_transfers(
@@ -90,7 +91,7 @@ class SCIImplementationTest(unittest.TestCase):
             lambda e: events.append(e),
         )
 
-        self.gntb.events.BatchTransfer.createFilter.assert_called_once_with(
+        self.gntb.events['BatchTransfer'].createFilter.assert_called_once_with(
             fromBlock=from_block,
             toBlock='latest',
             argument_filters={'from': None, 'to': receiver_address},
@@ -137,14 +138,14 @@ class SCIImplementationTest(unittest.TestCase):
         self.geth_client.get_filter_changes.reset_mock()
         self.geth_client.get_filter_changes.side_effect = \
             FilterNotFoundException()
-        self.gntb.events.BatchTransfer.createFilter.reset_mock()
-        self.gntb.events.BatchTransfer.createFilter.return_value = \
+        self.gntb.events['BatchTransfer'].createFilter.reset_mock()
+        self.gntb.events['BatchTransfer'].createFilter.return_value = \
             mock.Mock(filter_id=new_filter_id)
         self.geth_client.get_filter_logs.reset_mock()
 
         self.sci._monitor_blockchain_single()
 
-        self.gntb.events.BatchTransfer.createFilter.assert_called_once_with(
+        self.gntb.events['BatchTransfer'].createFilter.assert_called_once_with(
             fromBlock=block_number + self.sci.REQUIRED_CONFS,
             toBlock='latest',
             argument_filters={'from': None, 'to': receiver_address},
