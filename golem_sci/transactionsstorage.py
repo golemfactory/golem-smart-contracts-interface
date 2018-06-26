@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 
 from abc import abstractmethod
 from pathlib import Path
@@ -138,3 +139,5 @@ class JsonTransactionsStorage(TransactionsStorage):
     def _save(self, data: Dict) -> None:
         with open(self._filepath, 'w') as f:
             json.dump(data, f)
+            f.flush()
+            os.fsync(f.fileno())
