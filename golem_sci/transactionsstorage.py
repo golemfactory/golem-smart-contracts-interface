@@ -65,11 +65,11 @@ class JsonTransactionsStorage(TransactionsStorage):
                 self._data['tx'] = \
                     {int(nonce): tx for nonce, tx in self._data['tx'].items()}
         if 'nonce' not in self._data:
-            logger.info('Initiating TransactionStorage with nonce %d', nonce)
+            logger.info('Initiating TransactionStorage with nonce=%d', nonce)
             self._data['nonce'] = nonce
             self._data['tx'] = {}
             self._save(self._data)
-        elif self._data['nonce'] != nonce:
+        elif self._data['nonce'] < nonce:
             raise Exception(
                 'TransactionStorage initialization failed. Found '
                 'nonce={} while current nonce is={}'.format(
