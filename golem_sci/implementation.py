@@ -51,7 +51,7 @@ def _is_jsonrpc_error(e: Exception) -> bool:
     return len(arg) == 2 and 'message' in arg and 'code' in arg
 
 
-class SubscriptionFilter:
+class Subscription:
     def __init__(
             self,
             contract,
@@ -126,16 +126,14 @@ class SCIImplementation(SmartContractsInterface):
         self._faucet = _make_contract(contracts.Faucet)
 
         self._subs_lock = threading.Lock()
-        self._subscriptions: Dict[str, SubscriptionFilter] = {}
-
-        self._awaiting_callbacks: Dict[str, Tuple] = {}
-        self._cb_id = 0
+        self._subscriptions: List[Subscription] = []
 
         self._awaiting_transactions_lock = threading.Lock()
         self._awaiting_transactions: List[Tuple] = []
 
-        self._update_gas_price()
+        self._current_block = None
         self._update_block_numbers()
+        self._update_gas_price()
 
         self._eth_reserved_lock = threading.Lock()
         self._eth_reserved = 0
@@ -388,28 +386,26 @@ class SCIImplementation(SmartContractsInterface):
             event_cls,
             from_block: int,
             cb: Callable[[Any], None]) -> None:
-        filter_id = contract.events[event_name].createFilter(
-            fromBlock=from_block,
-            toBlock='latest',
-            argument_filters=args,
-        ).filter_id
-        logs = self._geth_client.get_filter_logs(filter_id)
-        with self._subs_lock:
+        if from_block <= self._confirmed_block:
+            logs = self._geth_client.get_logs(
+                contract,
+                event_name,
+                args,
+                from_block,
+                self._confirmed_block,
+            )
             for log in logs:
-                self._on_filter_log(
-                    filter_id,
-                    log,
-                    cb,
-                    event_cls,
-                )
-            self._subscriptions[filter_id] = SubscriptionFilter(
+                self._on_event(event_cls(log), cb)
+
+        with self._subs_lock:
+            self._subscriptions.append(Subscription(
                 contract,
                 event_name,
                 args,
                 event_cls,
                 cb,
-                from_block,
-            )
+                max(from_block - 1, self._confirmed_block),
+            ))
 
     def _monitor_blockchain(self):
         while not self._monitor_stop.is_set():
@@ -420,9 +416,10 @@ class SCIImplementation(SmartContractsInterface):
             time.sleep(15)
 
     def _monitor_blockchain_single(self):
-        self._update_block_numbers()
+        if not self._update_block_numbers():
+            return
         self._update_gas_price()
-        self._pull_filter_changes()
+        self._pull_subscription_events()
         self._process_awaiting_transactions()
         self._process_sent_transactions()
 
@@ -432,67 +429,43 @@ class SCIImplementation(SmartContractsInterface):
             min(self.GAS_PRICE, self._geth_client.get_gas_price()),
         )
 
-    def _update_block_numbers(self) -> None:
-        self._current_block = self._geth_client.get_block_number()
+    def _update_block_numbers(self) -> bool:
+        latest_block = self._geth_client.get_block_number()
+        if latest_block == self._current_block:
+            return False
+        self._current_block = latest_block
         self._confirmed_block = self._current_block - self.REQUIRED_CONFS + 1
+        return True
 
-    def _on_filter_log(self, filter_id, log, cb, event_cls) -> None:
-        tx_hash = log['transactionHash'].hex()
-        event_id = filter_id + tx_hash + str(log['logIndex'])
-        if log['removed']:
-            del self._awaiting_callbacks[event_id]
-        else:
-            cb_copy = cb
-            event = event_cls(log)
-            logger.info('Detected event %s, waiting for confirmations', event)
+    def _on_event(self, event, cb) -> None:
+        logger.info('Detected event %s', event)
+        try:
+            cb(event)
+        except Exception as e:
+            logger.exception('Event callback exception: %r', e)
 
-            self._awaiting_callbacks[event_id] = (
-                lambda: cb_copy(event),
-                self._cb_id,
-                log['blockNumber'],
-            )
-            self._cb_id += 1
-
-    def _pull_filter_changes(self) -> None:
+    def _pull_subscription_events(self) -> None:
         with self._subs_lock:
             subs = self._subscriptions.copy()
-        for filter_id, sub in subs.items():
+        for sub in subs:
             try:
-                logs = self._geth_client.get_filter_changes(filter_id)
-                for log in logs:
-                    self._on_filter_log(filter_id, log, sub.cb, sub.event_cls)
-                sub.last_pulled_block = self._current_block
-            except FilterNotFoundException as e:
-                logger.warning('Filter not found error, probably caused by'
-                               ' network loss. Recreating.')
-                with self._subs_lock:
-                    del self._subscriptions[filter_id]
-                self._create_subscription(
+                if sub.last_pulled_block >= self._confirmed_block:
+                    continue
+                logs = self._geth_client.get_logs(
                     sub.contract,
                     sub.event_name,
                     sub.args,
-                    sub.event_cls,
-                    sub.last_pulled_block,
-                    sub.cb,
+                    sub.last_pulled_block + 1,
+                    self._confirmed_block,
                 )
-
-        if self._awaiting_callbacks:
-            to_remove = []
-            chronological_callbacks = sorted(
-                self._awaiting_callbacks.items(),
-                key=lambda v: v[1][1],
-            )
-            for key, (cb, _, block_number) in chronological_callbacks:
-                if block_number <= self._confirmed_block:
-                    try:
-                        logger.info('Event confirmed')
-                        cb()
-                    except Exception as e:
-                        logger.exception('Event callback exception: %r', e)
-                    to_remove.append(key)
-
-            for key in to_remove:
-                del self._awaiting_callbacks[key]
+                for log in logs:
+                    self._on_event(sub.event_cls(log), sub.cb)
+                sub.last_pulled_block = self._confirmed_block
+            except Exception as e:
+                logger.exception(
+                    'Exception while processing subscription: %r',
+                    e,
+                )
 
     def _process_awaiting_transactions(self) -> None:
         with self._awaiting_transactions_lock:
