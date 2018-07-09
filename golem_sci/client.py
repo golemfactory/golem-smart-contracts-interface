@@ -8,6 +8,7 @@ from datetime import datetime
 from typing import Any, Dict, Union
 
 from ethereum.utils import zpad
+from web3.utils.filters import construct_event_filter_params
 
 logger = logging.getLogger(__name__)
 
@@ -230,35 +231,25 @@ class Client(object):
                 raise FilterNotFoundException()
             raise e
 
-    def get_logs(self,
-                 from_block=None,
-                 to_block=None,
-                 address=None,
-                 topics=None):
-        """
-        Retrieves logs based on filter options
-        :param from_block: Integer block number,
-        or "latest" for the last mined block
-        or "pending", "earliest" for not yet mined transactions
-        :param to_block: Integer block number,
-        or "latest" for the last mined block
-        or "pending", "earliest" for not yet mined transactions
-        :param address:
-        Contract address or a list of addresses from which logs should originate
-        :param topics:
-        Array of 32 Bytes DATA topics.
-        Topics are order-dependent.
-        Each topic can also be an array of DATA with "or" options
-        topic[hash, from, to]
-        The first topic is the hash of the signature of the event
-        (e.g. Deposit(address,bytes32,uint256)),
-        except you declared the event with the anonymous specifier.)
-        :return: Returns log entries described by filter options
-        """
-        for i in range(len(topics)):
-            topics[i] = Client.__add_padding(topics[i])
-        filter_id = self.new_filter(from_block, to_block, address, topics)
-        return self.get_filter_logs(filter_id)
+    def get_logs(
+            self,
+            contract,
+            event_name: str,
+            args,
+            from_block: Union[int, str],
+            to_block: Union[int, str]):
+        event_abi = list(filter(
+            lambda e: e['type'] == 'event' and e['name'] == event_name,
+            contract.abi,
+        ))
+        _, filter_args = construct_event_filter_params(
+            event_abi[0],
+            contract_address=contract.address,
+            argument_filters=args,
+            fromBlock=from_block,
+            toBlock=to_block,
+        )
+        return self.web3.eth.getLogs(filter_args)
 
     def contract(self, address, abi):
         return self.web3.eth.contract(address=address, abi=json.loads(abi))
