@@ -54,10 +54,8 @@ class TransactionsStorage:
 
 
 class JsonTransactionsStorage(TransactionsStorage):
-    FILENAME: ClassVar[str] = 'transactions.json'
-
-    def __init__(self, datadir: Path, nonce: int) -> None:
-        self._filepath = datadir / self.FILENAME
+    def __init__(self, filepath: Path, nonce: int) -> None:
+        self._filepath = filepath
         self._data = {}
         if self._filepath.exists():
             with open(self._filepath) as f:
