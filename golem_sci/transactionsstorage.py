@@ -4,7 +4,7 @@ import os
 
 from abc import abstractmethod
 from pathlib import Path
-from typing import ClassVar, Dict, List
+from typing import Any, Callable, Dict, List
 
 from eth_utils import decode_hex, encode_hex
 from ethereum.transactions import Transaction
@@ -14,12 +14,16 @@ logger = logging.getLogger(__name__)
 
 
 class TransactionsStorage:
-    @abstractmethod
-    def get_nonce(self) -> int:
-        """
-        Returns the nonce for the next transaction.
-        """
-        pass
+    def init(self, network_nonce: int) -> None:
+        if not self._is_storage_initialized():
+            self._init_with_nonce(network_nonce)
+            return
+
+        if self._get_nonce() < network_nonce:
+            raise Exception(
+                'TransactionStorage initialization failed. Has '
+                'nonce={} while network_nonce is={}'.format(
+                    self._get_nonce(), network_nonce))
 
     @abstractmethod
     def get_all_tx(self) -> List[Transaction]:
@@ -29,9 +33,13 @@ class TransactionsStorage:
         pass
 
     @abstractmethod
-    def put_tx_and_inc_nonce(self, tx: Transaction) -> None:
+    def set_nonce_sign_and_save_tx(
+            self,
+            sign_tx: Callable[[Transaction], None],
+            tx: Transaction) -> None:
         """
-        Save a valid transaction and increase the nonce.
+        Sets the next nonce for the transaction, invokes the callback for
+        signing and saves it to the storage.
         """
         pass
 
@@ -52,29 +60,53 @@ class TransactionsStorage:
         """
         pass
 
+    @abstractmethod
+    def _is_storage_initialized(self) -> bool:
+        """
+        Should return False if this is the first time we try to use this
+        storage.
+        """
+        pass
+
+    @abstractmethod
+    def _init_with_nonce(self, nonce: int) -> None:
+        """
+        Should initialize the storage and set the starting nonce.
+        """
+        pass
+
+    @abstractmethod
+    def _get_nonce(self) -> int:
+        """
+        Return current nonce.
+        """
+        pass
+
 
 class JsonTransactionsStorage(TransactionsStorage):
-    def __init__(self, filepath: Path, nonce: int) -> None:
+    def __init__(self, filepath: Path) -> None:
         self._filepath = filepath
-        self._data = {}
+        self._data: Dict[str, Any] = {}
         if self._filepath.exists():
             with open(self._filepath) as f:
                 self._data = json.load(f)
             if 'tx' in self._data:
                 self._data['tx'] = \
                     {int(nonce): tx for nonce, tx in self._data['tx'].items()}
-        if 'nonce' not in self._data:
-            logger.info('Initiating TransactionStorage with nonce=%d', nonce)
-            self._data['nonce'] = nonce
-            self._data['tx'] = {}
-            self._save(self._data)
-        elif self._data['nonce'] < nonce:
-            raise Exception(
-                'TransactionStorage initialization failed. Found '
-                'nonce={} while current nonce is={}'.format(
-                    self._data['nonce'], nonce))
 
-    def get_nonce(self) -> int:
+    def _is_storage_initialized(self) -> bool:
+        return 'nonce' in self._data
+
+    def _init_with_nonce(self, nonce: int) -> None:
+        logger.info(
+            'Initiating JsonTransactionStorage with nonce=%d',
+            nonce,
+        )
+        self._data['nonce'] = nonce
+        self._data['tx'] = {}
+        self._save(self._data)
+
+    def _get_nonce(self) -> int:
         return self._data['nonce']
 
     def get_all_tx(self) -> List[Transaction]:
@@ -92,11 +124,12 @@ class JsonTransactionsStorage(TransactionsStorage):
             )
         return [convert(tx) for tx in self._data['tx'].values()]
 
-    def put_tx_and_inc_nonce(self, tx: Transaction) -> None:
-        if tx.nonce != self._data['nonce']:
-            raise Exception(
-                'Transaction nonce does not match. Current={}, tx={}'.format(
-                    self._data['nonce'], tx.nonce))
+    def set_nonce_sign_and_save_tx(
+            self,
+            sign_tx: Callable[[Transaction], None],
+            tx: Transaction) -> None:
+        tx.nonce = self._data['nonce']
+        sign_tx(tx)
         logger.info(
             'Saving transaction %s, nonce=%d',
             encode_hex(tx.hash),

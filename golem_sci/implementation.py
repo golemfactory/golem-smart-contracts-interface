@@ -108,6 +108,7 @@ class SCIImplementation(SmartContractsInterface):
         self._geth_client = geth_client
         self._address = address
         self._storage = storage
+        self._storage.init(geth_client.get_transaction_count(address))
         self._tx_sign = tx_sign
 
         def _make_contract(contract: str):
@@ -238,12 +239,12 @@ class SCIImplementation(SmartContractsInterface):
             gas_price = self.get_current_gas_price()
 
         tx = Transaction(
-            nonce=self._get_current_nonce(),
             gasprice=gas_price,
             startgas=self.estimate_transfer_eth_gas(to_address, amount),
             to=to_address,
             value=amount,
             data=b'',
+            nonce=0,  # nonce will be overridden
         )
         return self._sign_and_send_transaction(tx)
 
@@ -324,11 +325,7 @@ class SCIImplementation(SmartContractsInterface):
             block_identifier=self._confirmed_block,
         )
 
-    def _get_current_nonce(self) -> int:
-        return self._storage.get_nonce()
-
     def _sign_and_send_transaction(self, tx: Transaction) -> str:
-        self._tx_sign(tx)
         total_eth = tx.startgas * tx.gasprice + tx.value
         balance = self.get_eth_balance(self._address)
         if total_eth > balance:
@@ -337,7 +334,7 @@ class SCIImplementation(SmartContractsInterface):
                     balance / denoms.ether,
                     total_eth / denoms.ether,
                 ))
-        self._storage.put_tx_and_inc_nonce(tx)
+        self._storage.set_nonce_sign_and_save_tx(self._tx_sign, tx)
         try:
             with self._eth_reserved_lock:
                 self._eth_reserved += total_eth
@@ -369,12 +366,12 @@ class SCIImplementation(SmartContractsInterface):
             'gas': gas_limit,
         })
         tx = Transaction(
-            nonce=self._get_current_nonce(),
             gasprice=self.get_current_gas_price(),
             startgas=gas_limit,
             to=raw_tx['to'],
             value=0,
             data=decode_hex(raw_tx['data']),
+            nonce=0,  # nonce will be overridden
         )
         return self._sign_and_send_transaction(tx)
 

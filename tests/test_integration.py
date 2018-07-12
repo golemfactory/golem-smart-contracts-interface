@@ -240,7 +240,7 @@ class IntegrationTest(TestCase):
                 self.web3,
                 user_address,
                 'test_chain',
-                JsonTransactionsStorage(self.tempdir / 'user_tx.json', 0),
+                JsonTransactionsStorage(self.tempdir / 'user_tx.json'),
                 sign_tx_user,
             )
 
@@ -250,7 +250,7 @@ class IntegrationTest(TestCase):
                 self.web3,
                 concent_address,
                 'test_chain',
-                JsonTransactionsStorage(self.tempdir2 / 'concent_tx.json', 0),
+                JsonTransactionsStorage(self.tempdir2 / 'concent_tx.json'),
                 sign_tx_concent,
             )
 
@@ -640,7 +640,7 @@ class IntegrationTest(TestCase):
                 self.web3,
                 self.user_sci.get_eth_address(),
                 'test_chain',
-                JsonTransactionsStorage(self.tempdir / 'user_tx.json', 1),
+                JsonTransactionsStorage(self.tempdir / 'user_tx.json'),
             )
             self.concent_sci = None
         self._fund_account(self.user_sci.get_eth_address())
