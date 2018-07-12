@@ -8,7 +8,13 @@ import subprocess
 from pathlib import Path
 from unittest import mock, TestCase
 
-from golem_sci import contracts, Payment, new_sci, GNTConverter
+from golem_sci import (
+    contracts,
+    Payment,
+    new_sci,
+    GNTConverter,
+    JsonTransactionsStorage,
+)
 from golem_sci.implementation import SCIImplementation
 
 from web3 import Web3
@@ -224,24 +230,27 @@ class IntegrationTest(TestCase):
         self._mine_required_blocks()
 
         with mock.patch('golem_sci.factory._ensure_genesis'), \
+                mock.patch('golem_sci.implementation.threading'), \
                 mock.patch('golem_sci.factory.ContractDataProvider') as cdp:
             cdp.return_value = self.provider
 
             def sign_tx_user(tx):
                 tx.sign(user_privkey)
             self.user_sci = new_sci(
-                self.tempdir,
                 self.web3,
                 user_address,
+                'test_chain',
+                JsonTransactionsStorage(self.tempdir / 'user_tx.json', 0),
                 sign_tx_user,
             )
 
             def sign_tx_concent(tx):
                 tx.sign(concent_privkey)
             self.concent_sci = new_sci(
-                self.tempdir2,
                 self.web3,
                 concent_address,
+                'test_chain',
+                JsonTransactionsStorage(self.tempdir2 / 'concent_tx.json', 0),
                 sign_tx_concent,
             )
 
@@ -623,14 +632,15 @@ class IntegrationTest(TestCase):
         assert len(self.user_sci._storage.get_all_tx()) == 1
         self._spawn_geth_process()
         with mock.patch('golem_sci.factory._ensure_genesis'), \
+                mock.patch('golem_sci.implementation.threading'), \
                 mock.patch('golem_sci.factory.ContractDataProvider') as cdp:
             cdp.return_value = self.provider
 
-            self.web3.eth.getTransactionCount = mock.Mock(return_value=1)
             self.user_sci = new_sci(
-                self.tempdir,
                 self.web3,
                 self.user_sci.get_eth_address(),
+                'test_chain',
+                JsonTransactionsStorage(self.tempdir / 'user_tx.json', 1),
             )
             self.concent_sci = None
         self._fund_account(self.user_sci.get_eth_address())

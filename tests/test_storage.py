@@ -1,4 +1,5 @@
 import os
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -23,8 +24,11 @@ def _make_signed_tx(nonce: int):
 
 class TransactionsStorageTest(unittest.TestCase):
     def setUp(self):
-        self.tempdir = Path(tempfile.mkdtemp())
-        self.storage = JsonTransactionsStorage(self.tempdir, 0)
+        self.tempfile = Path(tempfile.mkdtemp()) / 'tx.json'
+        self.storage = JsonTransactionsStorage(self.tempfile, 0)
+
+    def tearDown(self):
+        shutil.rmtree(self.tempfile.parent)
 
     def test_wrong_tx_nonce(self):
         assert self.storage.get_nonce() == 0
@@ -47,18 +51,18 @@ class TransactionsStorageTest(unittest.TestCase):
     def test_reload(self):
         tx = _make_signed_tx(0)
         self.storage.put_tx_and_inc_nonce(tx)
-        self.storage = JsonTransactionsStorage(self.tempdir, 1)
+        self.storage = JsonTransactionsStorage(self.tempfile, 1)
         assert self.storage.get_nonce() == 1
         transactions = self.storage.get_all_tx()
         assert len(transactions) == 1
         assert transactions[0] == tx
 
         self.storage.remove_tx(0)
-        self.storage = JsonTransactionsStorage(self.tempdir, 1)
+        self.storage = JsonTransactionsStorage(self.tempfile, 1)
         assert self.storage.get_nonce() == 1
         transactions = self.storage.get_all_tx()
         assert len(transactions) == 0
 
     def test_wrong_inital_nonce(self):
         with self.assertRaisesRegex(Exception, 'initialization failed'):
-            self.storage = JsonTransactionsStorage(self.tempdir, 1)
+            self.storage = JsonTransactionsStorage(self.tempfile, 1)

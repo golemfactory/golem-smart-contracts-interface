@@ -41,3 +41,5 @@ from .events import (  # noqa
     ForcedSubtaskPaymentEvent,
     CoverAdditionalVerificationEvent,
 )
+
+from .transactionsstorage import JsonTransactionsStorage  # noqa

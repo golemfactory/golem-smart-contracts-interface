@@ -1,7 +1,6 @@
 import logging
 import re
 import time
-from pathlib import Path
 from typing import Callable
 
 from distutils.version import StrictVersion
@@ -14,7 +13,7 @@ from .client import Client
 from .contracts.provider import ContractDataProvider
 from .implementation import SCIImplementation
 from .interface import SmartContractsInterface
-from .transactionsstorage import JsonTransactionsStorage
+from .transactionsstorage import TransactionsStorage
 
 logger = logging.getLogger(__name__)
 
@@ -31,29 +30,41 @@ MAX_GETH_VERSION = StrictVersion('1.8.999')
 
 
 def new_sci_ipc(
-        datadir: Path,
         ipc: str,
         address: str,
-        tx_sign: Callable[[Transaction], None]=None,
-        chain: str=chains.RINKEBY) -> SmartContractsInterface:
-    return new_sci(datadir, Web3(IPCProvider(ipc)), address, tx_sign, chain)
+        chain: str,
+        storage: TransactionsStorage,
+        tx_sign: Callable[[Transaction], None]=None) -> SmartContractsInterface:
+    return new_sci(
+        Web3(IPCProvider(ipc)),
+        address,
+        chain,
+        storage,
+        tx_sign,
+    )
 
 
 def new_sci_rpc(
-        datadir: Path,
         rpc: str,
         address: str,
-        tx_sign: Callable[[Transaction], None]=None,
-        chain: str=chains.RINKEBY) -> SmartContractsInterface:
-    return new_sci(datadir, Web3(HTTPProvider(rpc)), address, tx_sign, chain)
+        chain: str,
+        storage: TransactionsStorage,
+        tx_sign: Callable[[Transaction], None]=None) -> SmartContractsInterface:
+    return new_sci(
+        Web3(HTTPProvider(rpc)),
+        address,
+        chain,
+        storage,
+        tx_sign,
+    )
 
 
 def new_sci(
-        datadir: Path,
         web3: Web3,
         address: str,
-        tx_sign: Callable[[Transaction], None]=None,
-        chain: str=chains.RINKEBY) -> SmartContractsInterface:
+        chain: str,
+        storage: TransactionsStorage,
+        tx_sign: Callable[[Transaction], None]=None) -> SmartContractsInterface:
     # Web3 needs this extra middleware to properly handle rinkeby chain because
     # rinkeby is POA which violates some invariants
     if chain == chains.RINKEBY and \
@@ -64,11 +75,10 @@ def new_sci(
     _ensure_genesis(web3, chain)
     provider = ContractDataProvider(chain)
     geth_client = Client(web3)
-    nonce = geth_client.get_transaction_count(address)
     return SCIImplementation(
         geth_client,
         address,
-        JsonTransactionsStorage(datadir, nonce),
+        storage,
         provider,
         tx_sign,
     )
