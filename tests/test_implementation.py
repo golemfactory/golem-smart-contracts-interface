@@ -49,6 +49,11 @@ class SCIImplementationTest(unittest.TestCase):
     def test_eth_address(self):
         assert get_eth_address() == self.sci.get_eth_address()
 
+    def test_storage_init(self):
+        self.storage.init.assert_called_once_with(
+            self.geth_client.get_transaction_count(),
+        )
+
     def test_gas_price(self):
         hard_cap = self.sci.GAS_PRICE
 
