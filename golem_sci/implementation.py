@@ -132,7 +132,7 @@ class SCIImplementation(SmartContractsInterface):
         self._awaiting_transactions_lock = threading.Lock()
         self._awaiting_transactions: List[Tuple] = []
 
-        self._current_block = None
+        self._current_block = 0
         self._update_block_numbers()
         self._update_gas_price()
 
@@ -679,11 +679,11 @@ class SCIImplementation(SmartContractsInterface):
 
     def get_deposit_value(
             self,
-            account_address: str) -> Optional[int]:
+            account_address: str) -> int:
         return self._call(self._gntdeposit.functions.balanceOf(account_address))
 
     def get_deposit_locked_until(
             self,
-            account_address: str) -> Optional[int]:
+            account_address: str) -> int:
         return self._call(
             self._gntdeposit.functions.getTimelock(account_address))

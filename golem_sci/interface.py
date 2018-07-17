@@ -194,19 +194,19 @@ class SmartContractsInterface(object, metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def get_deposit_value(
             self,
-            account_address: str) -> Optional[int]:
+            account_address: str) -> int:
         """
-        Returns deposit value or None.
+        Returns Concent deposit value of a given address.
         """
         pass
 
     @abc.abstractmethod
     def get_deposit_locked_until(
             self,
-            account_address: str) -> Optional[int]:
+            account_address: str) -> int:
         """
         Returns deposit locked_until value which is a Unix epoch timestamp in
-        seconds. or None in case of issues.
+        seconds.
         """
         pass
 
