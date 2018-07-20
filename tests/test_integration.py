@@ -179,12 +179,6 @@ class IntegrationTest(TestCase):
             'abi': gntdeposit.ABI,
         }
 
-        # TODO Test GNTPaymentChannels
-        self.provider.data[contracts.GNTPaymentChannels] = {
-            'address': '0x' + 40 * '3',
-            'abi': '[]',
-        }
-
     def _fund_account(
             self,
             address: str,
