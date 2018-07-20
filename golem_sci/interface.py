@@ -272,6 +272,15 @@ class SmartContractsInterface(object, metaclass=abc.ABCMeta):
             to_block: int) -> List[ForcedPaymentEvent]:
         pass
 
+    @abc.abstractmethod
+    def subscribe_to_forced_payments(
+            self,
+            requestor_address: Optional[str],
+            provider_address: Optional[str],
+            from_block: int,
+            cb: Callable[[ForcedPaymentEvent], None]) -> None:
+        pass
+
     # Transaction
     @abc.abstractmethod
     def cover_additional_verification_cost(
