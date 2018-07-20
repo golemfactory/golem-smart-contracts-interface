@@ -594,6 +594,24 @@ class SCIImplementation(SmartContractsInterface):
 
         return [ForcedSubtaskPaymentEvent(raw_log) for raw_log in logs]
 
+    def subscribe_to_forced_subtask_payments(
+            self,
+            requestor_address: Optional[str],
+            provider_address: Optional[str],
+            from_block: int,
+            cb: Callable[[ForcedSubtaskPaymentEvent], None]) -> None:
+        self._create_subscription(
+            self._gntdeposit,
+            'ReimburseForSubtask',
+            {
+                '_requestor': requestor_address,
+                '_provider': provider_address,
+            },
+            ForcedSubtaskPaymentEvent,
+            from_block,
+            cb,
+        )
+
     def deposit_payment(self, value: int) -> str:
         return self.transfer_gntb_and_call(self._gntdeposit.address, value, b'')
 
@@ -645,20 +663,20 @@ class SCIImplementation(SmartContractsInterface):
 
         return [ForcedPaymentEvent(raw_log) for raw_log in logs]
 
-    def subscribe_to_forced_subtask_payments(
+    def subscribe_to_forced_payments(
             self,
             requestor_address: Optional[str],
             provider_address: Optional[str],
             from_block: int,
-            cb: Callable[[ForcedSubtaskPaymentEvent], None]) -> None:
+            cb: Callable[[ForcedPaymentEvent], None]) -> None:
         self._create_subscription(
             self._gntdeposit,
-            'ReimburseForSubtask',
+            'ReimburseForNoPayment',
             {
                 '_requestor': requestor_address,
                 '_provider': provider_address,
             },
-            ForcedSubtaskPaymentEvent,
+            ForcedPaymentEvent,
             from_block,
             cb,
         )

@@ -361,6 +361,7 @@ class IntegrationTest(TestCase):
         value = 123
         closure_time = 1337
         self.user_sci.deposit_payment(value)
+        events = []
 
         from_block = self.user_sci.get_block_number()
         # user can't force a payment
@@ -373,6 +374,13 @@ class IntegrationTest(TestCase):
         self._wait_for_pending()
         receipt = self.user_sci.get_transaction_receipt(tx_hash)
         assert not receipt.status
+
+        self.user_sci.subscribe_to_forced_payments(
+            None,
+            provider,
+            from_block,
+            lambda e: events.append(e),
+        )
 
         # only concent can
         self.concent_sci.force_payment(requestor, provider, value, closure_time)
@@ -392,6 +400,12 @@ class IntegrationTest(TestCase):
         assert forced_payments[0].provider == provider
         assert forced_payments[0].amount == value
         assert forced_payments[0].closure_time == closure_time
+
+        assert len(events) == 1
+        assert events[0].requestor == requestor
+        assert events[0].provider == provider
+        assert events[0].amount == value
+        assert events[0].closure_time == closure_time
 
     def test_forced_subtask_payment(self):
         self._create_gntb()
