@@ -511,8 +511,8 @@ class SCIImplementation(SmartContractsInterface):
                         logger.info('Resending transaction %r', tx_hash)
                         self._geth_client.send(tx)
             except Exception as e:
-                logger.exception(
-                    "Exception while processing transaction %s: %r",
+                logger.warning(
+                    "Exception while resending transaction %s: %r",
                     tx_hash,
                     e,
                 )
