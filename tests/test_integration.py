@@ -482,10 +482,13 @@ class IntegrationTest(TestCase):
 
     def test_withdraw_gntb(self):
         self._create_gntb()
-        amount = 123
+        amount1 = 123
+        amount2 = 222
+        amount = amount1 + amount2
         user_addr = self.user_sci.get_eth_address()
         recipient = TEST_RECIPIENT_ADDR
-        self.user_sci.convert_gntb_to_gnt(recipient, amount)
+        self.user_sci.convert_gntb_to_gnt(recipient, amount1)
+        self.user_sci.convert_gntb_to_gnt(recipient, amount2, 10 ** 9)
         self._mine_required_blocks()
         assert self.user_sci.get_gntb_balance(user_addr) == \
             1000 * denoms.ether - amount

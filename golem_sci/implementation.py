@@ -361,12 +361,15 @@ class SCIImplementation(SmartContractsInterface):
             contract,
             fn_name: str,
             args: List[Any],
-            gas_limit: int) -> str:
+            gas_limit: int,
+            gas_price: Optional[int] = None) -> str:
         raw_tx = contract.functions[fn_name](*args).buildTransaction({
             'gas': gas_limit,
         })
+        if gas_price is None:
+            gas_price = self.get_current_gas_price()
         tx = Transaction(
-            gasprice=self.get_current_gas_price(),
+            gasprice=gas_price,
             startgas=gas_limit,
             to=raw_tx['to'],
             value=0,
@@ -543,12 +546,17 @@ class SCIImplementation(SmartContractsInterface):
             self.GAS_TRANSFER_FROM_GATE,
         )
 
-    def convert_gntb_to_gnt(self, to_address: str, amount: int) -> str:
+    def convert_gntb_to_gnt(
+            self,
+            to_address: str,
+            amount: int,
+            gas_price: Optional[int] = None) -> str:
         return self._create_and_send_transaction(
             self._gntb,
             'withdrawTo',
             [amount, to_address],
             self.GAS_WITHDRAW,
+            gas_price,
         )
 
     ############################
