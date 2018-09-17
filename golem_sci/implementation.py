@@ -107,6 +107,8 @@ class SCIImplementation(SmartContractsInterface):
         """
         self._geth_client = geth_client
         self._address = address
+
+        self._tx_lock = threading.Lock()
         self._storage = storage
         self._storage.init(geth_client.get_transaction_count(address))
         self._tx_sign = tx_sign
@@ -326,35 +328,36 @@ class SCIImplementation(SmartContractsInterface):
         )
 
     def _sign_and_send_transaction(self, tx: Transaction) -> str:
-        total_eth = tx.startgas * tx.gasprice + tx.value
-        balance = self.get_eth_balance(self._address)
-        if total_eth > balance:
-            raise Exception(
-                'Not enough ETH for transaction. Got {}, required {}'.format(
-                    balance / denoms.ether,
-                    total_eth / denoms.ether,
-                ))
-        self._storage.set_nonce_sign_and_save_tx(self._tx_sign, tx)
-        try:
+        with self._tx_lock:
+            total_eth = tx.startgas * tx.gasprice + tx.value
+            balance = self.get_eth_balance(self._address)
+            if total_eth > balance:
+                raise Exception(
+                    'Not enough ETH for transaction. Has {}, required {}'.format(  # noqa
+                        balance / denoms.ether,
+                        total_eth / denoms.ether,
+                    ))
+            self._storage.set_nonce_sign_and_save_tx(self._tx_sign, tx)
             with self._eth_reserved_lock:
                 self._eth_reserved += total_eth
-            return self._geth_client.send(tx)
-        except Exception as e:
-            if _is_jsonrpc_error(e):
-                # This can be stuff like not enough gas for the transaction.
-                # It shouldn't ever happen and if it does then it's a bug
-                # that should be fixed by the caller.
-                logger.critical('web3 JSON rpc critical error %r', e)
-                with self._eth_reserved_lock:
-                    self._eth_reserved -= total_eth
-                self._storage.revert_last_tx()
-                raise
-            # We don't need to do anything explicitly, it will be retried
-            logger.exception(
-                'Exception while sending transaction, will be retried: %r',
-                e,
-            )
-            return encode_hex(tx.hash)
+            try:
+                return self._geth_client.send(tx)
+            except Exception as e:
+                if _is_jsonrpc_error(e):
+                    # This can be stuff like not enough gas for the transaction.
+                    # It shouldn't ever happen and if it does then it's a bug
+                    # that should be fixed by the caller.
+                    logger.critical('web3 JSON rpc critical error %r', e)
+                    with self._eth_reserved_lock:
+                        self._eth_reserved -= total_eth
+                    self._storage.revert_last_tx()
+                    raise
+                # We don't need to do anything explicitly, it will be retried
+                logger.exception(
+                    'Exception while sending transaction, will be retried: %r',
+                    e,
+                )
+                return encode_hex(tx.hash)
 
     def _create_and_send_transaction(
             self,
@@ -431,7 +434,7 @@ class SCIImplementation(SmartContractsInterface):
 
     def _update_block_numbers(self) -> bool:
         latest_block = self._geth_client.get_block_number()
-        if latest_block == self._current_block:
+        if latest_block <= self._current_block:
             return False
         self._current_block = latest_block
         self._confirmed_block = self._current_block - self.REQUIRED_CONFS + 1
@@ -496,29 +499,30 @@ class SCIImplementation(SmartContractsInterface):
             self._awaiting_transactions.extend(remaining_awaiting_transactions)
 
     def _process_sent_transactions(self) -> None:
-        transactions = self._storage.get_all_tx()
+        with self._tx_lock:
+            transactions = self._storage.get_all_tx()
 
-        for tx in transactions:
-            try:
-                tx_hash = encode_hex(tx.hash)
-                receipt = self.get_transaction_receipt(tx_hash)
-                if receipt:
-                    if receipt.block_number <= self._confirmed_block:
-                        self._storage.remove_tx(tx.nonce)
-                        with self._eth_reserved_lock:
-                            self._eth_reserved -= \
-                                tx.value + tx.gasprice * tx.startgas
-                else:
-                    tx_res = self._geth_client.get_transaction(tx_hash)
-                    if tx_res is None:
-                        logger.info('Resending transaction %r', tx_hash)
-                        self._geth_client.send(tx)
-            except Exception as e:
-                logger.warning(
-                    "Exception while resending transaction %s: %r",
-                    tx_hash,
-                    e,
-                )
+            for tx in transactions:
+                try:
+                    tx_hash = encode_hex(tx.hash)
+                    receipt = self.get_transaction_receipt(tx_hash)
+                    if receipt:
+                        if receipt.block_number <= self._confirmed_block:
+                            self._storage.remove_tx(tx.nonce)
+                            with self._eth_reserved_lock:
+                                self._eth_reserved -= \
+                                    tx.value + tx.gasprice * tx.startgas
+                    else:
+                        tx_res = self._geth_client.get_transaction(tx_hash)
+                        if tx_res is None:
+                            logger.info('Resending transaction %r', tx_hash)
+                            self._geth_client.send(tx)
+                except Exception as e:
+                    logger.warning(
+                        "Exception while resending transaction %s: %r",
+                        tx_hash,
+                        e,
+                    )
 
     ########################
     # GNT-GNTB conversions #
