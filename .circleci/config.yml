@@ -2,7 +2,7 @@ version: 2
 jobs:
    build:
      docker:
-       - image: circleci/python@sha256:5266fa743b2183588d433073a2eca9b863fb8593475e3f5baa42de8fb68c6f87
+       - image: circleci/python:3.6
      steps:
        - checkout
        - restore_cache:
@@ -13,7 +13,7 @@ jobs:
              wget https://gethstore.blob.core.windows.net/builds/geth-linux-amd64-1.8.10-eae63c51.tar.gz
              tar -xzvf geth-linux-amd64-1.8.10-eae63c51.tar.gz
              sudo mv geth-linux-amd64-1.8.10-eae63c51/geth /usr/local/bin/geth
-       - run: sudo apt-get install -y libgmp3-dev
+       - run: sudo apt-get install -y libsecp256k1-0 libsecp256k1-dev
        - run:
            command: |
              python3 -m venv venv
