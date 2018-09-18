@@ -411,7 +411,6 @@ class IntegrationTest(TestCase):
         self.user_sci.deposit_payment(value)
         self._wait_for_pending()
 
-        # subtask_id too long
         with self.assertRaisesRegex(ValueError, 'subtask_id has to be exactly'):
             self.concent_sci.force_subtask_payment(
                 requestor,
@@ -468,6 +467,54 @@ class IntegrationTest(TestCase):
         assert events[0].provider == provider
         assert events[0].amount == value
         assert events[0].subtask_id == subtask_id
+
+    def test_cover_additional_verification_costs(self):
+        self._create_gntb()
+        address = self.user_sci.get_eth_address()
+        value = 123
+        subtask_id = b'subtask_id' + b'0' * 22
+        self.user_sci.deposit_payment(value)
+        self._wait_for_pending()
+
+        with self.assertRaisesRegex(ValueError, 'subtask_id has to be exactly'):
+            self.concent_sci.cover_additional_verification_cost(
+                address,
+                value,
+                b'a' * 31,
+            )
+
+        from_block = self.user_sci.get_block_number()
+
+        # user can't force a payment
+        tx_hash = self.user_sci.cover_additional_verification_cost(
+            address,
+            value,
+            subtask_id,
+        )
+        self._wait_for_pending()
+        receipt = self.user_sci.get_transaction_receipt(tx_hash)
+        assert not receipt.status
+
+        # only concent can
+        self.concent_sci.cover_additional_verification_cost(
+            address,
+            value,
+            subtask_id,
+        )
+        self._mine_required_blocks()
+        assert self.user_sci.get_deposit_value(address) == 0
+        to_block = self.user_sci.get_block_number()
+        additional_costs = \
+            self.user_sci.get_covered_additional_verification_costs(
+                address,
+                from_block,
+                to_block,
+            )
+
+        assert len(additional_costs) == 1
+        assert additional_costs[0].address == address
+        assert additional_costs[0].amount == value
+        assert additional_costs[0].subtask_id == subtask_id
 
     def test_gntb_transfer(self):
         self._create_gntb()

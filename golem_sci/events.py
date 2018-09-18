@@ -48,11 +48,9 @@ class ForcedPaymentEvent:
 
 
 class CoverAdditionalVerificationEvent:
-    def __init__(
-            self,
-            tx_hash: str,
-            address: str,
-            amount: int) -> None:
-        self.tx_hash = tx_hash
-        self.address = address
-        self.amount = amount
+    def __init__(self, raw_log: Dict[str, Any]) -> None:
+        self.tx_hash: str = raw_log['transactionHash'].hex()
+        self.address: str = \
+            to_checksum_address('0x' + raw_log['topics'][1].hex()[26:])
+        self.amount: int = int(raw_log['data'][2:66], 16)
+        self.subtask_id: bytes = decode_hex(raw_log['data'][66:130])
