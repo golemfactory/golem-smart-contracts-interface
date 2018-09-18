@@ -84,7 +84,7 @@ class SCIImplementation(SmartContractsInterface):
     GAS_FAUCET = 90000
     # Concent methods
     GAS_UNLOCK_DEPOSIT = 55000
-    GAS_FORCE_PAYMENT = 80000
+    GAS_REIMBURSE = 80000
     GAS_WITHDRAW_DEPOSIT = 75000
 
     REQUIRED_CONFS: ClassVar[int] = 6
@@ -584,7 +584,7 @@ class SCIImplementation(SmartContractsInterface):
                 value,
                 subtask_id,
             ],
-            self.GAS_FORCE_PAYMENT,
+            self.GAS_REIMBURSE,
         )
 
     def get_forced_subtask_payments(
@@ -653,7 +653,7 @@ class SCIImplementation(SmartContractsInterface):
             self._gntdeposit,
             'reimburseForNoPayment',
             [requestor_address, provider_address, value, closure_time],
-            self.GAS_FORCE_PAYMENT,
+            self.GAS_REIMBURSE,
         )
 
     def get_forced_payments(
@@ -695,17 +695,34 @@ class SCIImplementation(SmartContractsInterface):
 
     def cover_additional_verification_cost(
             self,
-            client_address: str,
+            address: str,
             value: int,
-            subtask_id: str) -> str:
-        raise Exception("Not implemented yet")
+            subtask_id: bytes) -> str:
+        if len(subtask_id) != 32:
+            raise ValueError('subtask_id has to be exactly 32 bytes long')
+        return self._create_and_send_transaction(
+            self._gntdeposit,
+            'reimburseForVerificationCosts',
+            [address, value, subtask_id],
+            self.GAS_REIMBURSE,
+        )
 
     def get_covered_additional_verification_costs(
             self,
             address: str,
             from_block: int,
             to_block: int) -> List[CoverAdditionalVerificationEvent]:
-        raise Exception("Not implemented yet")
+        filter_id = self._gntdeposit.events.ReimburseForVerificationCosts.\
+            createFilter(
+                fromBlock=from_block,
+                toBlock=to_block,
+                argument_filters={
+                    '_from': address,
+                },
+            ).filter_id
+        logs = self._geth_client.get_filter_logs(filter_id)
+
+        return [CoverAdditionalVerificationEvent(raw_log) for raw_log in logs]
 
     def get_deposit_value(
             self,

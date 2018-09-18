@@ -289,9 +289,9 @@ class SmartContractsInterface(object, metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def cover_additional_verification_cost(
             self,
-            client_address: str,
+            address: str,
             value: int,
-            subtask_id: str) -> str:
+            subtask_id: bytes) -> str:
         pass
 
     @abc.abstractmethod
