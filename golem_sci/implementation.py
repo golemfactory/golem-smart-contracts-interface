@@ -7,7 +7,7 @@ from ethereum.utils import zpad, int_to_big_endian, denoms
 from ethereum.transactions import Transaction
 from eth_utils import decode_hex, encode_hex
 
-from golem_sci import contracts
+from . import contracts
 from .client import Client, FilterNotFoundException
 from .interface import SmartContractsInterface
 from .events import (
@@ -94,7 +94,7 @@ class SCIImplementation(SmartContractsInterface):
             geth_client: Client,
             address: str,
             storage: TransactionsStorage,
-            contract_data_provider,
+            contract_addresses: Dict[contracts.Contract, str],
             tx_sign=None,
             monitor=True) -> None:
         """
@@ -113,18 +113,20 @@ class SCIImplementation(SmartContractsInterface):
         self._storage.init(geth_client.get_transaction_count(address))
         self._tx_sign = tx_sign
 
-        def _make_contract(contract: str):
-            try:
-                return self._geth_client.contract(
-                    contract_data_provider.get_address(contract),
-                    contract_data_provider.get_abi(contract),
+        def _make_contract(contract: contracts.Contract):
+            if contract not in contract_addresses:
+                logger.info(
+                    "Address not provided for %s, won't be able to use it",
+                    contract,
                 )
-            except Exception as e:
-                logger.warning("Unable to use `%s` contract: %r", contract, e)
                 return None
+            return self._geth_client.contract(
+                contract_addresses[contract],
+                contracts.get_abi(contract),
+            )
 
-        self._gnt = _make_contract(contracts.GolemNetworkToken)
-        self._gntb = _make_contract(contracts.GolemNetworkTokenBatching)
+        self._gnt = _make_contract(contracts.GNT)
+        self._gntb = _make_contract(contracts.GNTB)
         self._gntdeposit = _make_contract(contracts.GNTDeposit)
         self._faucet = _make_contract(contracts.Faucet)
 

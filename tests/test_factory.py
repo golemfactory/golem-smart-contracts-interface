@@ -31,9 +31,17 @@ class FactoryTest(unittest.TestCase):
         eth_address = '0xdeafbeef'
         web3 = mock.MagicMock()
         web3.middleware_stack.__iter__.return_value = []
+        contract_addresses = {}
         storage = mock.Mock()
 
-        new_sci(web3, eth_address, RINKEBY, storage, tx_sign)
+        new_sci(
+            web3,
+            eth_address,
+            RINKEBY,
+            storage,
+            contract_addresses,
+            tx_sign,
+        )
         ensure_connection.assert_called_once_with(web3)
         ensure_geth_version.assert_called_once_with(web3)
         ensure_genesis.assert_called_once_with(web3, RINKEBY)
@@ -41,7 +49,7 @@ class FactoryTest(unittest.TestCase):
             mock.ANY,
             eth_address,
             storage,
-            mock.ANY,
+            contract_addresses,
             tx_sign,
         )
 

@@ -29,17 +29,6 @@ ZERO_ADDR = '0x' + 40 * '0'
 TEST_RECIPIENT_ADDR = '0x' + 40 * '9'
 
 
-class MockProvider:
-    def __init__(self) -> None:
-        self.data = {}
-
-    def get_address(self, contract: str) -> str:
-        return self.data[contract]['address']
-
-    def get_abi(self, contract: str) -> str:
-        return self.data[contract]['abi']
-
-
 def privtochecksumaddr(priv):
     return to_checksum_address(encode_hex(privtoaddr(priv)))
 
@@ -80,10 +69,9 @@ class IntegrationTest(TestCase):
         addr = self.web3.personal.listAccounts[0]
 
         block_number = self.web3.eth.blockNumber
-        from golem_sci.contracts.data.rinkeby import golemnetworktoken
         gnt = self.web3.eth.contract(
             bytecode=contract_bin.GNT,
-            abi=json.loads(golemnetworktoken.ABI),
+            abi=json.loads(contracts.get_abi(contracts.GNT)),
         )
         gnt_tx = gnt.constructor(
             golem_address,
@@ -94,10 +82,7 @@ class IntegrationTest(TestCase):
         self._wait_for_pending()
         gnt_address = \
             self.web3.eth.getTransactionReceipt(gnt_tx)['contractAddress']
-        self.provider.data[contracts.GolemNetworkToken] = {
-            'address': gnt_address,
-            'abi': golemnetworktoken.ABI,
-        }
+        self.contract_addresses[contracts.GNT] = gnt_address
         gnt.functions.create().transact({
             'from': addr,
             'value': 2 * 10 ** 16,
@@ -117,10 +102,9 @@ class IntegrationTest(TestCase):
             'to': gnt_address,
         })
 
-        from golem_sci.contracts.data.rinkeby import faucet
         faucet_contract = self.web3.eth.contract(
             bytecode=contract_bin.Faucet,
-            abi=json.loads(faucet.ABI),
+            abi=json.loads(contracts.get_abi(contracts.Faucet)),
         )
         faucet_tx = faucet_contract.constructor(gnt_address).transact(
             transaction={'from': addr},
@@ -128,10 +112,7 @@ class IntegrationTest(TestCase):
         self._wait_for_pending()
         faucet_address = \
             self.web3.eth.getTransactionReceipt(faucet_tx)['contractAddress']
-        self.provider.data[contracts.Faucet] = {
-            'address': faucet_address,
-            'abi': faucet.ABI,
-        }
+        self.contract_addresses[contracts.Faucet] = faucet_address
 
         gnt.functions.transfer(faucet_address, total_gnt).transact({
             'from': addr,
@@ -140,33 +121,27 @@ class IntegrationTest(TestCase):
 
     def _deploy_gntb(self):
         addr = self.web3.personal.listAccounts[0]
-        from golem_sci.contracts.data.rinkeby import golemnetworktokenbatching
         gntb = self.web3.eth.contract(
             bytecode=contract_bin.GNTB,
-            abi=json.loads(golemnetworktokenbatching.ABI),
+            abi=json.loads(contracts.get_abi(contracts.GNTB)),
         )
-        gnt_address = self.provider.get_address(contracts.GolemNetworkToken)
+        gnt_address = self.contract_addresses[contracts.GNT]
         gntb_tx = gntb.constructor(gnt_address).transact(
             transaction={'from': addr},
         )
         self._wait_for_pending()
         gntb_address = \
             self.web3.eth.getTransactionReceipt(gntb_tx)['contractAddress']
-        self.provider.data[contracts.GolemNetworkTokenBatching] = {
-            'address': gntb_address,
-            'abi': golemnetworktokenbatching.ABI,
-        }
+        self.contract_addresses[contracts.GNTB] = gntb_address
 
     def _deploy_concent(self, concent_address: str):
         self.gntdeposit_withdrawal_delay = 7 * 24 * 60 * 60
         addr = self.web3.personal.listAccounts[0]
-        from golem_sci.contracts.data.rinkeby import gntdeposit
         gnt_deposit = self.web3.eth.contract(
             bytecode=contract_bin.GNTDeposit,
-            abi=json.loads(gntdeposit.ABI),
+            abi=json.loads(contracts.get_abi(contracts.GNTDeposit)),
         )
-        gntb_address = \
-            self.provider.get_address(contracts.GolemNetworkTokenBatching)
+        gntb_address = self.contract_addresses[contracts.GNTB]
         gnt_deposit_tx = gnt_deposit.constructor(
             gntb_address,
             concent_address,  # concent
@@ -176,10 +151,7 @@ class IntegrationTest(TestCase):
         self._wait_for_pending()
         gntdeposit_address = self.web3.eth.getTransactionReceipt(
             gnt_deposit_tx)['contractAddress']
-        self.provider.data[contracts.GNTDeposit] = {
-            'address': gntdeposit_address,
-            'abi': gntdeposit.ABI,
-        }
+        self.contract_addresses[contracts.GNTDeposit] = gntdeposit_address
 
     def _fund_account(
             self,
@@ -214,7 +186,7 @@ class IntegrationTest(TestCase):
         concent_address = privtochecksumaddr(concent_privkey)
         user_address = privtochecksumaddr(user_privkey)
 
-        self.provider = MockProvider()
+        self.contract_addresses = {}
 
         self._deploy_gnt(golem_address)
         self._deploy_gntb()
@@ -226,10 +198,7 @@ class IntegrationTest(TestCase):
         self._mine_required_blocks()
 
         with mock.patch('golem_sci.factory._ensure_genesis'), \
-                mock.patch('golem_sci.implementation.threading'), \
-                mock.patch('golem_sci.factory.ContractDataProvider') as cdp:
-            cdp.return_value = self.provider
-
+                mock.patch('golem_sci.implementation.threading'):
             def sign_tx_user(tx):
                 tx.sign(user_privkey)
             self.user_sci = new_sci(
@@ -237,6 +206,7 @@ class IntegrationTest(TestCase):
                 user_address,
                 'test_chain',
                 JsonTransactionsStorage(self.tempdir / 'user_tx.json'),
+                self.contract_addresses,
                 sign_tx_user,
             )
 
@@ -247,6 +217,7 @@ class IntegrationTest(TestCase):
                 concent_address,
                 'test_chain',
                 JsonTransactionsStorage(self.tempdir2 / 'concent_tx.json'),
+                self.contract_addresses,
                 sign_tx_concent,
             )
 
@@ -692,15 +663,13 @@ class IntegrationTest(TestCase):
         assert len(self.user_sci._storage.get_all_tx()) == 1
         self._spawn_geth_process()
         with mock.patch('golem_sci.factory._ensure_genesis'), \
-                mock.patch('golem_sci.implementation.threading'), \
-                mock.patch('golem_sci.factory.ContractDataProvider') as cdp:
-            cdp.return_value = self.provider
-
+                mock.patch('golem_sci.implementation.threading'):
             self.user_sci = new_sci(
                 self.web3,
                 self.user_sci.get_eth_address(),
                 'test_chain',
                 JsonTransactionsStorage(self.tempdir / 'user_tx.json'),
+                self.contract_addresses,
             )
             self.concent_sci = None
         self._fund_account(self.user_sci.get_eth_address())

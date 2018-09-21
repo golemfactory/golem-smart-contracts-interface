@@ -1,16 +1,15 @@
 import logging
 import re
 import time
-from typing import Callable
+from typing import Callable, Dict
 
 from distutils.version import StrictVersion
 from ethereum.transactions import Transaction
 from web3 import Web3, IPCProvider, HTTPProvider
 from web3.middleware import geth_poa_middleware
 
-from . import chains
+from . import chains, contracts
 from .client import Client
-from .contracts.provider import ContractDataProvider
 from .implementation import SCIImplementation
 from .interface import SmartContractsInterface
 from .transactionsstorage import TransactionsStorage
@@ -34,12 +33,14 @@ def new_sci_ipc(
         address: str,
         chain: str,
         storage: TransactionsStorage,
+        contract_addresses: Dict[contracts.Contract, str],
         tx_sign: Callable[[Transaction], None]=None) -> SmartContractsInterface:
     return new_sci(
         Web3(IPCProvider(ipc)),
         address,
         chain,
         storage,
+        contract_addresses,
         tx_sign,
     )
 
@@ -49,12 +50,14 @@ def new_sci_rpc(
         address: str,
         chain: str,
         storage: TransactionsStorage,
+        contract_addresses: Dict[contracts.Contract, str],
         tx_sign: Callable[[Transaction], None]=None) -> SmartContractsInterface:
     return new_sci(
         Web3(HTTPProvider(rpc)),
         address,
         chain,
         storage,
+        contract_addresses,
         tx_sign,
     )
 
@@ -64,6 +67,7 @@ def new_sci(
         address: str,
         chain: str,
         storage: TransactionsStorage,
+        contract_addresses: Dict[contracts.Contract, str],
         tx_sign: Callable[[Transaction], None]=None) -> SmartContractsInterface:
     # Web3 needs this extra middleware to properly handle rinkeby chain because
     # rinkeby is POA which violates some invariants
@@ -73,13 +77,12 @@ def new_sci(
     _ensure_connection(web3)
     _ensure_geth_version(web3)
     _ensure_genesis(web3, chain)
-    provider = ContractDataProvider(chain)
     geth_client = Client(web3)
     return SCIImplementation(
         geth_client,
         address,
         storage,
-        provider,
+        contract_addresses,
         tx_sign,
     )
 
