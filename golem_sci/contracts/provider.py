@@ -5,7 +5,6 @@ from .data.rinkeby import (
     golemnetworktokenbatching,
     faucet,
     gntdeposit,
-    gntpaymentchannels,
 )
 from .data.mainnet import (
     golemnetworktoken as maingnt,

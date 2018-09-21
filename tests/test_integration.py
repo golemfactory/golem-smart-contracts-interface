@@ -17,6 +17,8 @@ from golem_sci import (
 )
 from golem_sci.implementation import SCIImplementation
 
+from . import contract_bin
+
 from web3 import Web3
 from web3.middleware import geth_poa_middleware
 from web3.providers import IPCProvider
@@ -80,7 +82,7 @@ class IntegrationTest(TestCase):
         block_number = self.web3.eth.blockNumber
         from golem_sci.contracts.data.rinkeby import golemnetworktoken
         gnt = self.web3.eth.contract(
-            bytecode=golemnetworktoken.BIN,
+            bytecode=contract_bin.GNT,
             abi=json.loads(golemnetworktoken.ABI),
         )
         gnt_tx = gnt.constructor(
@@ -117,7 +119,7 @@ class IntegrationTest(TestCase):
 
         from golem_sci.contracts.data.rinkeby import faucet
         faucet_contract = self.web3.eth.contract(
-            bytecode=faucet.BIN,
+            bytecode=contract_bin.Faucet,
             abi=json.loads(faucet.ABI),
         )
         faucet_tx = faucet_contract.constructor(gnt_address).transact(
@@ -140,7 +142,7 @@ class IntegrationTest(TestCase):
         addr = self.web3.personal.listAccounts[0]
         from golem_sci.contracts.data.rinkeby import golemnetworktokenbatching
         gntb = self.web3.eth.contract(
-            bytecode=golemnetworktokenbatching.BIN,
+            bytecode=contract_bin.GNTB,
             abi=json.loads(golemnetworktokenbatching.ABI),
         )
         gnt_address = self.provider.get_address(contracts.GolemNetworkToken)
@@ -155,19 +157,19 @@ class IntegrationTest(TestCase):
             'abi': golemnetworktokenbatching.ABI,
         }
 
-    def _deploy_concents(self, concent_address: str):
+    def _deploy_concent(self, concent_address: str):
         self.gntdeposit_withdrawal_delay = 7 * 24 * 60 * 60
         addr = self.web3.personal.listAccounts[0]
         from golem_sci.contracts.data.rinkeby import gntdeposit
         gnt_deposit = self.web3.eth.contract(
-            bytecode=gntdeposit.BIN,
+            bytecode=contract_bin.GNTDeposit,
             abi=json.loads(gntdeposit.ABI),
         )
         gntb_address = \
             self.provider.get_address(contracts.GolemNetworkTokenBatching)
         gnt_deposit_tx = gnt_deposit.constructor(
             gntb_address,
-            concent_address,  # oracle
+            concent_address,  # concent
             concent_address,  # coldwallet
             self.gntdeposit_withdrawal_delay,
         ).transact(transaction={'from': addr})
@@ -216,7 +218,7 @@ class IntegrationTest(TestCase):
 
         self._deploy_gnt(golem_address)
         self._deploy_gntb()
-        self._deploy_concents(concent_address)
+        self._deploy_concent(concent_address)
 
         self._fund_account(concent_address)
         self._fund_account(user_address)
