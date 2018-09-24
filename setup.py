@@ -8,10 +8,6 @@ setup(
     maintainer_email='tech@golem.network',
     packages=[
         'golem_sci',
-        'golem_sci.contracts',
-        'golem_sci.contracts.data',
-        'golem_sci.contracts.data.rinkeby',
-        'golem_sci.contracts.data.mainnet',
     ],
     python_requires='>=3.5',
     install_requires=[

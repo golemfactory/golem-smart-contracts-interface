@@ -5,11 +5,8 @@ import unittest
 from eth_utils import to_checksum_address
 from hexbytes import HexBytes
 
-from golem_sci import chains
-from golem_sci.contracts.provider import ContractDataProvider
+from golem_sci import contracts
 from golem_sci.implementation import SCIImplementation
-from golem_sci.contracts.data.rinkeby.golemnetworktokenbatching import ADDRESS \
-    as GNTBAddress
 
 
 def get_eth_address():
@@ -37,14 +34,18 @@ class SCIImplementationTest(unittest.TestCase):
         self.storage.get_all_tx.return_value = []
         self.storage.get_nonce.return_value = 0
 
+        self.contract_addresses = {
+            contracts.GNTB: '0x' + 40 * '1',
+        }
+
         self.sci = SCIImplementation(
             self.geth_client,
             get_eth_address(),
             self.storage,
-            ContractDataProvider(chains.RINKEBY),
+            self.contract_addresses,
             self.sign_tx,
             monitor=False)
-        self.gntb = self.contracts[GNTBAddress]
+        self.gntb = self.contracts[self.contract_addresses[contracts.GNTB]]
 
     def test_eth_address(self):
         assert get_eth_address() == self.sci.get_eth_address()
@@ -211,15 +212,14 @@ class SCIImplementationTest(unittest.TestCase):
         assert not receipt
 
     def test_missing_contracts(self):
-        provider = mock.Mock()
-        provider.get_address.return_value = Exception('missing')
+        contract_addresses = {}
 
         # Constructor shouldn't throw when there are missing contracts' data
         sci = SCIImplementation(
             self.geth_client,
             get_eth_address(),
             self.storage,
-            provider,
+            contract_addresses,
             monitor=False,
         )
         # But we can't use them then
