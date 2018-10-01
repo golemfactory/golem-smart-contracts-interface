@@ -652,6 +652,14 @@ class SCIImplementation(SmartContractsInterface):
             self.GAS_UNLOCK_DEPOSIT,
         )
 
+    def lock_deposit(self) -> str:
+        return self._create_and_send_transaction(
+            self._gntdeposit,
+            'lock',
+            [],
+            self.GAS_UNLOCK_DEPOSIT,
+        )
+
     def withdraw_deposit(self) -> str:
         return self._create_and_send_transaction(
             self._gntdeposit,

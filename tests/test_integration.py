@@ -303,9 +303,14 @@ class IntegrationTest(TestCase):
         self.user_sci.unlock_deposit()
         self._wait_for_pending()
         tx_hash = self.user_sci.withdraw_deposit()
-        self._wait_for_pending()
+        self._mine_required_blocks()
         receipt = self.user_sci.get_transaction_receipt(tx_hash)
         assert not receipt.status
+
+        assert self.user_sci.get_deposit_locked_until(user_addr) > 0
+        self.user_sci.lock_deposit()
+        self._mine_required_blocks()
+        assert self.user_sci.get_deposit_locked_until(user_addr) == 0
 
         """ This needs block timestamp manipulation """
         # can't withdraw if still time locked

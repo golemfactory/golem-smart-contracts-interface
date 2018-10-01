@@ -226,6 +226,11 @@ class SmartContractsInterface(object, metaclass=abc.ABCMeta):
 
     # Transaction
     @abc.abstractmethod
+    def lock_deposit(self) -> str:
+        pass
+
+    # Transaction
+    @abc.abstractmethod
     def withdraw_deposit(self) -> str:
         pass
 
