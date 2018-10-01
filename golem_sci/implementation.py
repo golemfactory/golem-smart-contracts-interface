@@ -345,7 +345,22 @@ class SCIImplementation(SmartContractsInterface):
             try:
                 return self._geth_client.send(tx)
             except Exception as e:
+                tx_hash = encode_hex(tx.hash)
                 if _is_jsonrpc_error(e):
+                    # yay for grepping for the error message because error codes
+                    # from Geth are not unique
+                    error_msg = e.args[0]['message']
+                    # This can happen when reconnecting to other Geth instance
+                    # but initial request went through anyway and the
+                    # transaction was propagated, so this is fine
+                    if error_msg.startswith('known transaction'):
+                        return tx_hash
+                    # Similar to the above but there are two cases:
+                    # 1. Transaction got mined in the meantime and this is fine
+                    # 2. Otherwise an actual error
+                    if error_msg.startswith('nonce too low'):
+                        if self.get_transaction_receipt(tx_hash) is not None:
+                            return tx_hash
                     # This can be stuff like not enough gas for the transaction.
                     # It shouldn't ever happen and if it does then it's a bug
                     # that should be fixed by the caller.
@@ -359,7 +374,7 @@ class SCIImplementation(SmartContractsInterface):
                     'Exception while sending transaction, will be retried: %r',
                     e,
                 )
-                return encode_hex(tx.hash)
+                return tx_hash
 
     def _create_and_send_transaction(
             self,

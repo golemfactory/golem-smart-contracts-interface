@@ -678,6 +678,18 @@ class IntegrationTest(TestCase):
         self._mine_required_blocks()
         assert len(self.user_sci._storage.get_all_tx()) == 0
 
+    def test_nonce_too_low(self):
+        self.user_sci.transfer_eth(ZERO_ADDR, 1)
+
+        self.user_sci._storage._data = {'nonce': 0, 'tx': {}}
+        # shouldn't throw since it's the same transaction
+        self.user_sci.transfer_eth(ZERO_ADDR, 1)
+
+        self.user_sci._storage._data = {'nonce': 0, 'tx': {}}
+        # different transaction so it should throw
+        with self.assertRaisesRegex(Exception, 'nonce too low'):
+            self.user_sci.transfer_eth(ZERO_ADDR, 2)
+
     def test_get_transaction_gas_price(self):
         tx_hash_nope = '0x' + 64 * '1'
         assert self.user_sci.get_transaction_gas_price(tx_hash_nope) is None
