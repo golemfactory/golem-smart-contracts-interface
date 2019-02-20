@@ -6,10 +6,11 @@ class BlocksHelper:
     def __init__(self, sci: SmartContractsInterface) -> None:
         self._sci = sci
 
-    def get_first_block_after(self, timestamp: int) -> Block:
+    def get_latest_existing_block_at(self, timestamp: int) -> Block:
         """
         Returns block with smallest number for which
-        `block.timestamp > timestamp` is satisfied.
+        `block.timestamp > timestamp` is satisfied or if
+        such block doesn't exist returns latest block.
         """
         lo = -1
         hi = self._sci.get_block_number()
@@ -20,7 +21,4 @@ class BlocksHelper:
             else:
                 lo = mid
         res = self._sci.get_block_by_number(hi)
-        if res.timestamp <= timestamp:
-            raise ValueError(
-                'There are currently no blocks after {}'.format(timestamp))
         return res
