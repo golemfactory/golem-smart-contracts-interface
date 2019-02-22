@@ -294,7 +294,12 @@ class SCIImplementation(SmartContractsInterface):
             self,
             tx_hash: str) -> Optional[TransactionReceipt]:
         raw = self._geth_client.get_transaction_receipt(tx_hash)
-        return TransactionReceipt(raw) if raw else None
+        if not raw:
+            return None
+        receipt = TransactionReceipt(raw)
+        if receipt.block_number > self._confirmed_block:
+            return None
+        return receipt
 
     def get_transaction_gas_price(
             self,
@@ -359,7 +364,7 @@ class SCIImplementation(SmartContractsInterface):
                     # 1. Transaction got mined in the meantime and this is fine
                     # 2. Otherwise an actual error
                     if error_msg.startswith('nonce too low'):
-                        if self.get_transaction_receipt(tx_hash) is not None:
+                        if self._geth_client.get_transaction_receipt(tx_hash):
                             return tx_hash
                     # This can be stuff like not enough gas for the transaction.
                     # It shouldn't ever happen and if it does then it's a bug
@@ -497,8 +502,6 @@ class SCIImplementation(SmartContractsInterface):
             receipt = self.get_transaction_receipt(tx_hash)
             if not receipt:
                 return False
-            if receipt.block_number > self._confirmed_block:
-                return False
             try:
                 cb(receipt)
             except Exception as e:
@@ -524,11 +527,10 @@ class SCIImplementation(SmartContractsInterface):
                     tx_hash = encode_hex(tx.hash)
                     receipt = self.get_transaction_receipt(tx_hash)
                     if receipt:
-                        if receipt.block_number <= self._confirmed_block:
-                            self._storage.remove_tx(tx.nonce)
-                            with self._eth_reserved_lock:
-                                self._eth_reserved -= \
-                                    tx.value + tx.gasprice * tx.startgas
+                        self._storage.remove_tx(tx.nonce)
+                        with self._eth_reserved_lock:
+                            self._eth_reserved -= \
+                                tx.value + tx.gasprice * tx.startgas
                     else:
                         tx_res = self._geth_client.get_transaction(tx_hash)
                         if tx_res is None:

@@ -295,7 +295,7 @@ class IntegrationTest(TestCase):
 
         # can't withdraw if unlocked
         tx_hash = self.user_sci.withdraw_deposit()
-        self._wait_for_pending()
+        self._mine_required_blocks()
         receipt = self.user_sci.get_transaction_receipt(tx_hash)
         assert not receipt.status
 
@@ -343,7 +343,7 @@ class IntegrationTest(TestCase):
             value,
             closure_time,
         )
-        self._wait_for_pending()
+        self._mine_required_blocks()
         receipt = self.user_sci.get_transaction_receipt(tx_hash)
         assert not receipt.status
 
@@ -412,7 +412,7 @@ class IntegrationTest(TestCase):
             value,
             subtask_id,
         )
-        self._wait_for_pending()
+        self._mine_required_blocks()
         receipt = self.user_sci.get_transaction_receipt(tx_hash)
         assert not receipt.status
 
@@ -469,7 +469,7 @@ class IntegrationTest(TestCase):
             value,
             subtask_id,
         )
-        self._wait_for_pending()
+        self._mine_required_blocks()
         receipt = self.user_sci.get_transaction_receipt(tx_hash)
         assert not receipt.status
 
@@ -702,3 +702,10 @@ class IntegrationTest(TestCase):
         gas_price = 123
         tx_hash = self.user_sci.transfer_eth(ZERO_ADDR, 1, gas_price=gas_price)
         assert self.user_sci.get_transaction_gas_price(tx_hash) == gas_price
+
+    def test_mined_but_unconfirmed_receipt(self):
+        tx_hash = self.user_sci.transfer_eth(ZERO_ADDR, 1)
+        self._wait_for_pending()
+        assert self.user_sci.get_transaction_receipt(tx_hash) is None
+        self._mine_required_blocks()
+        assert self.user_sci.get_transaction_receipt(tx_hash) is not None

@@ -54,7 +54,7 @@ class SmartContractsInterface(object, metaclass=abc.ABCMeta):
             self,
             tx_hash: str) -> Optional[TransactionReceipt]:
         """
-        Returns transaction receipt or None if it hasn't been mined yet.
+        Returns transaction receipt or None if it hasn't been confirmed yet.
         """
         pass
 
