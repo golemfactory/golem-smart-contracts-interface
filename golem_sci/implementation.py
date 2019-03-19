@@ -3,9 +3,10 @@ import threading
 import time
 from typing import Any, Callable, ClassVar, Dict, List, Optional, Tuple
 
+from eth_account.messages import defunct_hash_message
+from eth_utils import decode_hex, encode_hex
 from ethereum.utils import zpad, int_to_big_endian, denoms
 from ethereum.transactions import Transaction
-from eth_utils import decode_hex, encode_hex
 
 from . import contracts
 from .client import Client, FilterNotFoundException
@@ -84,7 +85,7 @@ class SCIImplementation(SmartContractsInterface):
     GAS_FAUCET = 90000
     # Concent methods
     GAS_UNLOCK_DEPOSIT = 55000
-    GAS_REIMBURSE = 80000
+    GAS_REIMBURSE = 90000
     GAS_WITHDRAW_DEPOSIT = 75000
 
     REQUIRED_CONFS: ClassVar[int] = 6
@@ -582,16 +583,44 @@ class SCIImplementation(SmartContractsInterface):
             gas_price,
         )
 
+    def _sign_message(
+            self,
+            hexmsg: str,
+            privkey: bytes) -> Tuple[int, bytes, bytes]:
+        message_hash = defunct_hash_message(hexstr=hexmsg)
+        signed_message = self._geth_client.web3.eth.account.signHash(
+            message_hash,
+            private_key=privkey,
+        )
+        v = signed_message['v']
+        r = (signed_message['r']).to_bytes(32, byteorder='big')
+        s = (signed_message['s']).to_bytes(32, byteorder='big')
+        return (v, r, s)
+
     ############################
     # Concent specific methods #
     ############################
+
+    def sign_message_for_subtask_payment(
+            self,
+            requestor_address: str,
+            provider_address: str,
+            value: int,
+            subtask_id: bytes,
+            privkey: bytes) -> Tuple[int, bytes, bytes]:
+        hexmsg = "0x" + requestor_address[2:] + provider_address[2:] + \
+            (value).to_bytes(32, byteorder='big').hex() + subtask_id.hex()
+        return self._sign_message(hexmsg, privkey)
 
     def force_subtask_payment(
             self,
             requestor_address: str,
             provider_address: str,
             value: int,
-            subtask_id: bytes) -> str:
+            subtask_id: bytes,
+            v: int,
+            r: bytes,
+            s: bytes) -> str:
         if len(subtask_id) != 32:
             raise ValueError('subtask_id has to be exactly 32 bytes long')
         return self._create_and_send_transaction(
@@ -602,6 +631,9 @@ class SCIImplementation(SmartContractsInterface):
                 provider_address,
                 value,
                 subtask_id,
+                v,
+                r,
+                s,
             ],
             self.GAS_REIMBURSE,
         )
@@ -674,13 +706,26 @@ class SCIImplementation(SmartContractsInterface):
             self,
             requestor_address: str,
             provider_address: str,
-            value: int,
+            value: List[int],
+            subtask_id: List[bytes],
+            v: List[int],
+            r: List[bytes],
+            s: List[bytes],
             closure_time: int) -> str:
         return self._create_and_send_transaction(
             self._gntdeposit,
             'reimburseForNoPayment',
-            [requestor_address, provider_address, value, closure_time],
-            self.GAS_REIMBURSE,
+            [
+                requestor_address,
+                provider_address,
+                value,
+                subtask_id,
+                v,
+                r,
+                s,
+                closure_time,
+            ],
+            self.GAS_REIMBURSE + len(value) * 5000,
         )
 
     def get_forced_payments(
@@ -720,17 +765,30 @@ class SCIImplementation(SmartContractsInterface):
             cb,
         )
 
+    def sign_message_for_additional_verification(
+            self,
+            address: str,
+            value: int,
+            subtask_id: bytes,
+            privkey: bytes) -> Tuple[int, bytes, bytes]:
+        hexmsg = "0x" + address[2:] + self._gntdeposit.address[2:] + \
+            (value).to_bytes(32, byteorder='big').hex() + subtask_id.hex()
+        return self._sign_message(hexmsg, privkey)
+
     def cover_additional_verification_cost(
             self,
             address: str,
             value: int,
-            subtask_id: bytes) -> str:
+            subtask_id: bytes,
+            v: int,
+            r: bytes,
+            s: bytes) -> str:
         if len(subtask_id) != 32:
             raise ValueError('subtask_id has to be exactly 32 bytes long')
         return self._create_and_send_transaction(
             self._gntdeposit,
             'reimburseForVerificationCosts',
-            [address, value, subtask_id],
+            [address, value, subtask_id, v, r, s],
             self.GAS_REIMBURSE,
         )
 

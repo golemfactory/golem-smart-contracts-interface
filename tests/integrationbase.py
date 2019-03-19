@@ -179,10 +179,10 @@ class IntegrationBase(TestCase):
 
         golem_privkey = os.urandom(32)
         concent_privkey = os.urandom(32)
-        user_privkey = os.urandom(32)
+        self.user_privkey = os.urandom(32)
         golem_address = privtochecksumaddr(golem_privkey)
         concent_address = privtochecksumaddr(concent_privkey)
-        user_address = privtochecksumaddr(user_privkey)
+        user_address = privtochecksumaddr(self.user_privkey)
 
         self.contract_addresses = {}
 
@@ -198,7 +198,7 @@ class IntegrationBase(TestCase):
         with mock.patch('golem_sci.factory._ensure_genesis'), \
                 mock.patch('golem_sci.implementation.threading'):
             def sign_tx_user(tx):
-                tx.sign(user_privkey)
+                tx.sign(self.user_privkey)
             self.user_sci = new_sci(
                 self.web3,
                 user_address,
