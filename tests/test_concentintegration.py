@@ -72,9 +72,9 @@ class TestConcentIntegration(IntegrationBase):
             subtask_id2,
             self.user_privkey,
         )
-        total_amount = amount1 + amount2
+        reimburse_amount = (amount1 + amount2) // 2
         closure_time = 1337
-        self.user_sci.deposit_payment(total_amount)
+        self.user_sci.deposit_payment(reimburse_amount)
         events = []
 
         from_block = self.user_sci.get_block_number()
@@ -87,10 +87,27 @@ class TestConcentIntegration(IntegrationBase):
             [v1, v2],
             [r1, r2],
             [s1, s2],
+            reimburse_amount,
             closure_time,
         )
         self._mine_required_blocks()
         receipt = self.user_sci.get_transaction_receipt(tx_hash)
+        assert not receipt.status
+
+        # total amount excedded
+        tx_hash = self.concent_sci.force_payment(
+            requestor,
+            provider,
+            [amount1, amount2],
+            [subtask_id1, subtask_id2],
+            [v1, v2],
+            [r1, r2],
+            [s1, s2],
+            amount1 + amount2 + 1,
+            closure_time,
+        )
+        self._mine_required_blocks()
+        receipt = self.concent_sci.get_transaction_receipt(tx_hash)
         assert not receipt.status
 
         self.user_sci.subscribe_to_forced_payments(
@@ -109,12 +126,13 @@ class TestConcentIntegration(IntegrationBase):
             [v1, v2],
             [r1, r2],
             [s1, s2],
+            reimburse_amount,
             closure_time,
         )
         self._mine_required_blocks()
         assert self.user_sci.get_transaction_receipt(tx_hash).status
         assert self.user_sci.get_deposit_value(requestor) == 0
-        assert self.user_sci.get_gntb_balance(provider) == total_amount
+        assert self.user_sci.get_gntb_balance(provider) == reimburse_amount
         to_block = self.user_sci.get_block_number()
         forced_payments = self.user_sci.get_forced_payments(
             requestor,
@@ -126,13 +144,13 @@ class TestConcentIntegration(IntegrationBase):
         assert len(forced_payments) == 1
         assert forced_payments[0].requestor == requestor
         assert forced_payments[0].provider == provider
-        assert forced_payments[0].amount == total_amount
+        assert forced_payments[0].amount == reimburse_amount
         assert forced_payments[0].closure_time == closure_time
 
         assert len(events) == 1
         assert events[0].requestor == requestor
         assert events[0].provider == provider
-        assert events[0].amount == total_amount
+        assert events[0].amount == reimburse_amount
         assert events[0].closure_time == closure_time
 
     def test_forced_subtask_payment(self):

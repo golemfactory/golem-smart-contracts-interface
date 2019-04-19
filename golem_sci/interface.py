@@ -283,6 +283,7 @@ class SmartContractsInterface(object, metaclass=abc.ABCMeta):
             v: List[int],
             r: List[bytes],
             s: List[bytes],
+            reimburse_amount: int,
             closure_time: int) -> str:
         pass
 

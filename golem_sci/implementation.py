@@ -3,6 +3,7 @@ import threading
 import time
 from typing import Any, Callable, ClassVar, Dict, List, Optional, Tuple
 
+from eth_account import Account
 from eth_account.messages import defunct_hash_message
 from eth_utils import decode_hex, encode_hex
 from ethereum.utils import zpad, int_to_big_endian, denoms
@@ -583,12 +584,12 @@ class SCIImplementation(SmartContractsInterface):
             gas_price,
         )
 
+    @staticmethod
     def _sign_message(
-            self,
             hexmsg: str,
             privkey: bytes) -> Tuple[int, bytes, bytes]:
         message_hash = defunct_hash_message(hexstr=hexmsg)
-        signed_message = self._geth_client.web3.eth.account.signHash(
+        signed_message = Account.signHash(
             message_hash,
             private_key=privkey,
         )
@@ -711,6 +712,7 @@ class SCIImplementation(SmartContractsInterface):
             v: List[int],
             r: List[bytes],
             s: List[bytes],
+            reimburse_amount: int,
             closure_time: int) -> str:
         return self._create_and_send_transaction(
             self._gntdeposit,
@@ -723,6 +725,7 @@ class SCIImplementation(SmartContractsInterface):
                 v,
                 r,
                 s,
+                reimburse_amount,
                 closure_time,
             ],
             self.GAS_REIMBURSE + len(value) * 5000,
