@@ -234,16 +234,6 @@ class SmartContractsInterface(object, metaclass=abc.ABCMeta):
     def withdraw_deposit(self) -> str:
         pass
 
-    @abc.abstractmethod
-    def sign_message_for_subtask_payment(
-            self,
-            requestor_address: str,
-            provider_address: str,
-            value: int,
-            subtask_id: bytes,
-            privkey: bytes) -> Tuple[int, bytes, bytes]:
-        pass
-
     # Transaction
     @abc.abstractmethod
     def force_subtask_payment(
@@ -303,15 +293,6 @@ class SmartContractsInterface(object, metaclass=abc.ABCMeta):
             provider_address: Optional[str],
             from_block: int,
             cb: Callable[[ForcedPaymentEvent], None]) -> None:
-        pass
-
-    @abc.abstractmethod
-    def sign_message_for_additional_verification(
-            self,
-            address: str,
-            value: int,
-            subtask_id: bytes,
-            privkey: bytes) -> Tuple[int, bytes, bytes]:
         pass
 
     # Transaction

@@ -56,22 +56,14 @@ class TestConcentIntegration(IntegrationBase):
         provider = TEST_RECIPIENT_ADDR
         amount1 = 123
         subtask_id1 = b'subtask_id1' + b'0' * 21
-        v1, r1, s1 = self.user_sci.sign_message_for_subtask_payment(
-            requestor,
-            provider,
-            amount1,
-            subtask_id1,
-            self.user_privkey,
-        )
+        v1 = 28
+        r1 = b'\xcf\x1a\xcd[\xa6\xfa\xee\x1e4\xf9\x1ec\xefy\x14Ufk.\xdb:\xa36\xd5z\xb1M"\x1b}\xe2t'   # noqa
+        s1 = b'\x08\xce\x820\xd1K\x17{\xd1]\xec\x1bOE\xc0"J\xf8-\x7f\xc9\xa7\xfd\xd6\xef\xab\xd5)\xb6\x83\x80N'  # noqa
         amount2 = 231
         subtask_id2 = b'subtask_id2' + b'0' * 21
-        v2, r2, s2 = self.user_sci.sign_message_for_subtask_payment(
-            requestor,
-            provider,
-            amount2,
-            subtask_id2,
-            self.user_privkey,
-        )
+        v2 = 27
+        r2 = b'\x17\xa97Cx\xfd\x84\xbf\xb4H\x8a\xd6\x85PvW\xb9>\x0f\xc2\x13\xcc\xde\x0b\xaf9S\x86\xac\x81\xae\x85'  # noqa
+        s2 = b'\x14)\x873\x8fX\xfa\xd6\x83\x1a\x82W\x9f\x86\t\xa2s\x01[\xbc!\xf2\x13\x1dX\xef\n\xfbc\x9f\x8a\xb5'  # noqa
         reimburse_amount = (amount1 + amount2) // 2
         closure_time = 1337
         self.user_sci.deposit_payment(reimburse_amount)
@@ -162,13 +154,9 @@ class TestConcentIntegration(IntegrationBase):
         events = []
         self.user_sci.deposit_payment(value)
         self._wait_for_pending()
-        v, r, s = self.user_sci.sign_message_for_subtask_payment(
-            requestor,
-            provider,
-            value,
-            subtask_id,
-            self.user_privkey,
-        )
+        v = 27
+        r = b'\xffD\x16\xa3\x18\xca\x95\xd8\xc5\xaek\x99p\xcb\xb3}\xbd\x83\xe3\xb6WN\xce~\xb4\x8f\xdaq\x06)g\xe4'  # noqa
+        s = b'\x01\x93_\x8f\x82\xe2\xe3\xd3\xe9\xec\x84\x9a\x83\xec\xb6\xe9\xaf\xebS\x86\xf6`IR\x83\xb0\xc4bw\x0c\xab\x13'  # noqa
 
         with self.assertRaisesRegex(ValueError, 'subtask_id has to be exactly'):
             self.concent_sci.force_subtask_payment(
@@ -245,12 +233,9 @@ class TestConcentIntegration(IntegrationBase):
         self.user_sci.deposit_payment(value)
         self._wait_for_pending()
 
-        v, r, s = self.user_sci.sign_message_for_additional_verification(
-            address,
-            value,
-            subtask_id,
-            self.user_privkey,
-        )
+        v = 27
+        r = b'\x80Q\x9d!\x90\x0b\x8d\x80\xe1\xf1\xf1D\xb1\xa2v\x94\x1c`|\xcc2?\x7f\xa3~\x81\xf8\x00&$,p'  # noqa
+        s = b'F\xf4\x98\x00\x84\x943r\xebY\x99\xf1H\x90\xc6\xec>\x90\xf5"\x8f\xee\n\x9e\xd9\x89\x01c\xb8\x94\xef\xa0'  # noqa
 
         with self.assertRaisesRegex(ValueError, 'subtask_id has to be exactly'):
             self.concent_sci.cover_additional_verification_cost(

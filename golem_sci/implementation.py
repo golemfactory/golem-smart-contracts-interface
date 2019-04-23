@@ -3,8 +3,6 @@ import threading
 import time
 from typing import Any, Callable, ClassVar, Dict, List, Optional, Tuple
 
-from eth_account import Account
-from eth_account.messages import defunct_hash_message
 from eth_utils import decode_hex, encode_hex
 from ethereum.utils import zpad, int_to_big_endian, denoms
 from ethereum.transactions import Transaction
@@ -584,34 +582,9 @@ class SCIImplementation(SmartContractsInterface):
             gas_price,
         )
 
-    @staticmethod
-    def _sign_message(
-            hexmsg: str,
-            privkey: bytes) -> Tuple[int, bytes, bytes]:
-        message_hash = defunct_hash_message(hexstr=hexmsg)
-        signed_message = Account.signHash(
-            message_hash,
-            private_key=privkey,
-        )
-        v = signed_message['v']
-        r = (signed_message['r']).to_bytes(32, byteorder='big')
-        s = (signed_message['s']).to_bytes(32, byteorder='big')
-        return (v, r, s)
-
     ############################
     # Concent specific methods #
     ############################
-
-    def sign_message_for_subtask_payment(
-            self,
-            requestor_address: str,
-            provider_address: str,
-            value: int,
-            subtask_id: bytes,
-            privkey: bytes) -> Tuple[int, bytes, bytes]:
-        hexmsg = "0x" + requestor_address[2:] + provider_address[2:] + \
-            (value).to_bytes(32, byteorder='big').hex() + subtask_id.hex()
-        return self._sign_message(hexmsg, privkey)
 
     def force_subtask_payment(
             self,
@@ -767,16 +740,6 @@ class SCIImplementation(SmartContractsInterface):
             from_block,
             cb,
         )
-
-    def sign_message_for_additional_verification(
-            self,
-            address: str,
-            value: int,
-            subtask_id: bytes,
-            privkey: bytes) -> Tuple[int, bytes, bytes]:
-        hexmsg = "0x" + address[2:] + self._gntdeposit.address[2:] + \
-            (value).to_bytes(32, byteorder='big').hex() + subtask_id.hex()
-        return self._sign_message(hexmsg, privkey)
 
     def cover_additional_verification_cost(
             self,
