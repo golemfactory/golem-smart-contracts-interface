@@ -3,9 +3,9 @@ import threading
 import time
 from typing import Any, Callable, ClassVar, Dict, List, Optional, Tuple
 
+from eth_utils import decode_hex, encode_hex
 from ethereum.utils import zpad, int_to_big_endian, denoms
 from ethereum.transactions import Transaction
-from eth_utils import decode_hex, encode_hex
 
 from . import contracts
 from .client import Client, FilterNotFoundException
@@ -84,7 +84,7 @@ class SCIImplementation(SmartContractsInterface):
     GAS_FAUCET = 90000
     # Concent methods
     GAS_UNLOCK_DEPOSIT = 55000
-    GAS_REIMBURSE = 80000
+    GAS_REIMBURSE = 90000
     GAS_WITHDRAW_DEPOSIT = 75000
 
     REQUIRED_CONFS: ClassVar[int] = 6
@@ -591,7 +591,10 @@ class SCIImplementation(SmartContractsInterface):
             requestor_address: str,
             provider_address: str,
             value: int,
-            subtask_id: bytes) -> str:
+            subtask_id: bytes,
+            v: int,
+            r: bytes,
+            s: bytes) -> str:
         if len(subtask_id) != 32:
             raise ValueError('subtask_id has to be exactly 32 bytes long')
         return self._create_and_send_transaction(
@@ -602,6 +605,9 @@ class SCIImplementation(SmartContractsInterface):
                 provider_address,
                 value,
                 subtask_id,
+                v,
+                r,
+                s,
             ],
             self.GAS_REIMBURSE,
         )
@@ -674,13 +680,28 @@ class SCIImplementation(SmartContractsInterface):
             self,
             requestor_address: str,
             provider_address: str,
-            value: int,
+            value: List[int],
+            subtask_id: List[bytes],
+            v: List[int],
+            r: List[bytes],
+            s: List[bytes],
+            reimburse_amount: int,
             closure_time: int) -> str:
         return self._create_and_send_transaction(
             self._gntdeposit,
             'reimburseForNoPayment',
-            [requestor_address, provider_address, value, closure_time],
-            self.GAS_REIMBURSE,
+            [
+                requestor_address,
+                provider_address,
+                value,
+                subtask_id,
+                v,
+                r,
+                s,
+                reimburse_amount,
+                closure_time,
+            ],
+            self.GAS_REIMBURSE + len(value) * 5000,
         )
 
     def get_forced_payments(
@@ -724,13 +745,16 @@ class SCIImplementation(SmartContractsInterface):
             self,
             address: str,
             value: int,
-            subtask_id: bytes) -> str:
+            subtask_id: bytes,
+            v: int,
+            r: bytes,
+            s: bytes) -> str:
         if len(subtask_id) != 32:
             raise ValueError('subtask_id has to be exactly 32 bytes long')
         return self._create_and_send_transaction(
             self._gntdeposit,
             'reimburseForVerificationCosts',
-            [address, value, subtask_id],
+            [address, value, subtask_id, v, r, s],
             self.GAS_REIMBURSE,
         )
 

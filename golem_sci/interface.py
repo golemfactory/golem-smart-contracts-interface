@@ -1,4 +1,4 @@
-from typing import Callable, Optional, List
+from typing import Callable, Optional, List, Tuple
 import abc
 
 from .events import (
@@ -268,7 +268,12 @@ class SmartContractsInterface(object, metaclass=abc.ABCMeta):
             self,
             requestor_address: str,
             provider_address: str,
-            value: int,
+            value: List[int],
+            subtask_id: List[bytes],
+            v: List[int],
+            r: List[bytes],
+            s: List[bytes],
+            reimburse_amount: int,
             closure_time: int) -> str:
         pass
 
@@ -296,7 +301,10 @@ class SmartContractsInterface(object, metaclass=abc.ABCMeta):
             self,
             address: str,
             value: int,
-            subtask_id: bytes) -> str:
+            subtask_id: bytes,
+            v: int,
+            r: bytes,
+            s: bytes) -> str:
         pass
 
     @abc.abstractmethod

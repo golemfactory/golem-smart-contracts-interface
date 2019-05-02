@@ -1,6 +1,5 @@
 import atexit
 import json
-import os
 import shutil
 import subprocess
 import tempfile
@@ -132,9 +131,8 @@ class IntegrationBase(TestCase):
             self.web3.eth.getTransactionReceipt(gntb_tx)['contractAddress']
         self.contract_addresses[contracts.GNTB] = gntb_address
 
-    def _deploy_concent(self, concent_address: str):
+    def _deploy_concent(self, concent_address: str, golem_privkey: bytes):
         self.gntdeposit_withdrawal_delay = 7 * 24 * 60 * 60
-        addr = self.web3.personal.listAccounts[0]
         gnt_deposit = self.web3.eth.contract(
             bytecode=contract_bin.GNTDeposit,
             abi=json.loads(contracts.get_abi(contracts.GNTDeposit)),
@@ -145,10 +143,17 @@ class IntegrationBase(TestCase):
             concent_address,  # concent
             concent_address,  # coldwallet
             self.gntdeposit_withdrawal_delay,
-        ).transact(transaction={'from': addr})
+        ).buildTransaction()
+        gnt_deposit_tx['nonce'] = \
+            self.web3.eth.getTransactionCount(privtochecksumaddr(golem_privkey))
+        # Different nonce will generate different contract address
+        assert gnt_deposit_tx['nonce'] == 0
+        signed_tx = \
+            self.web3.eth.account.signTransaction(gnt_deposit_tx, golem_privkey)
+        tx_hash = self.web3.eth.sendRawTransaction(signed_tx.rawTransaction)
         self._wait_for_pending()
         gntdeposit_address = self.web3.eth.getTransactionReceipt(
-            gnt_deposit_tx)['contractAddress']
+            tx_hash)['contractAddress']
         self.contract_addresses[contracts.GNTDeposit] = gntdeposit_address
 
     def _fund_account(
@@ -177,18 +182,19 @@ class IntegrationBase(TestCase):
         self.tempdir = Path(tempfile.mkdtemp())
         self.tempdir2 = Path(tempfile.mkdtemp())
 
-        golem_privkey = os.urandom(32)
-        concent_privkey = os.urandom(32)
-        user_privkey = os.urandom(32)
+        # random keys
+        golem_privkey = b"2M\xf1\x8c}\xc3%B\xda\xa2\x85\x9c\x14\xba\xe5@\xefq\xeaM'q\xbc!\x97^\xc8\x1b\x1b\x89\x93\x7f"  # noqa
+        concent_privkey = b't\xddGX\xd0\x84\x9c\xf4\xeeYV,\xd9\xab\xd9\xbd\xa3\xa4\xc8\xe4Hr\x9b\xdc4\n\xe7N}MF\x8b'  # noqa
+        self.user_privkey = b'\xc5!\xc1\x91A\x15I]\xd2~\xf4\x1f\xf7a|\xd2\x9d\xcd\xea-\x1f\xde\xbaU\x9dh:Vv!H\xb9'  # noqa
         golem_address = privtochecksumaddr(golem_privkey)
         concent_address = privtochecksumaddr(concent_privkey)
-        user_address = privtochecksumaddr(user_privkey)
+        user_address = privtochecksumaddr(self.user_privkey)
 
         self.contract_addresses = {}
 
         self._deploy_gnt(golem_address)
         self._deploy_gntb()
-        self._deploy_concent(concent_address)
+        self._deploy_concent(concent_address, golem_privkey)
 
         self._fund_account(concent_address)
         self._fund_account(user_address)
@@ -198,7 +204,7 @@ class IntegrationBase(TestCase):
         with mock.patch('golem_sci.factory._ensure_genesis'), \
                 mock.patch('golem_sci.implementation.threading'):
             def sign_tx_user(tx):
-                tx.sign(user_privkey)
+                tx.sign(self.user_privkey)
             self.user_sci = new_sci(
                 self.web3,
                 user_address,

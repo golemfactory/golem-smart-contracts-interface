@@ -54,9 +54,19 @@ class TestConcentIntegration(IntegrationBase):
         self._create_gntb()
         requestor = self.user_sci.get_eth_address()
         provider = TEST_RECIPIENT_ADDR
-        value = 123
+        amount1 = 123
+        subtask_id1 = b'subtask_id1' + b'0' * 21
+        v1 = 28
+        r1 = b'\xcf\x1a\xcd[\xa6\xfa\xee\x1e4\xf9\x1ec\xefy\x14Ufk.\xdb:\xa36\xd5z\xb1M"\x1b}\xe2t'   # noqa
+        s1 = b'\x08\xce\x820\xd1K\x17{\xd1]\xec\x1bOE\xc0"J\xf8-\x7f\xc9\xa7\xfd\xd6\xef\xab\xd5)\xb6\x83\x80N'  # noqa
+        amount2 = 231
+        subtask_id2 = b'subtask_id2' + b'0' * 21
+        v2 = 27
+        r2 = b'\x17\xa97Cx\xfd\x84\xbf\xb4H\x8a\xd6\x85PvW\xb9>\x0f\xc2\x13\xcc\xde\x0b\xaf9S\x86\xac\x81\xae\x85'  # noqa
+        s2 = b'\x14)\x873\x8fX\xfa\xd6\x83\x1a\x82W\x9f\x86\t\xa2s\x01[\xbc!\xf2\x13\x1dX\xef\n\xfbc\x9f\x8a\xb5'  # noqa
+        reimburse_amount = (amount1 + amount2) // 2
         closure_time = 1337
-        self.user_sci.deposit_payment(value)
+        self.user_sci.deposit_payment(reimburse_amount)
         events = []
 
         from_block = self.user_sci.get_block_number()
@@ -64,11 +74,32 @@ class TestConcentIntegration(IntegrationBase):
         tx_hash = self.user_sci.force_payment(
             requestor,
             provider,
-            value,
+            [amount1, amount2],
+            [subtask_id1, subtask_id2],
+            [v1, v2],
+            [r1, r2],
+            [s1, s2],
+            reimburse_amount,
             closure_time,
         )
         self._mine_required_blocks()
         receipt = self.user_sci.get_transaction_receipt(tx_hash)
+        assert not receipt.status
+
+        # total amount excedded
+        tx_hash = self.concent_sci.force_payment(
+            requestor,
+            provider,
+            [amount1, amount2],
+            [subtask_id1, subtask_id2],
+            [v1, v2],
+            [r1, r2],
+            [s1, s2],
+            amount1 + amount2 + 1,
+            closure_time,
+        )
+        self._mine_required_blocks()
+        receipt = self.concent_sci.get_transaction_receipt(tx_hash)
         assert not receipt.status
 
         self.user_sci.subscribe_to_forced_payments(
@@ -79,10 +110,21 @@ class TestConcentIntegration(IntegrationBase):
         )
 
         # only concent can
-        self.concent_sci.force_payment(requestor, provider, value, closure_time)
+        tx_hash = self.concent_sci.force_payment(
+            requestor,
+            provider,
+            [amount1, amount2],
+            [subtask_id1, subtask_id2],
+            [v1, v2],
+            [r1, r2],
+            [s1, s2],
+            reimburse_amount,
+            closure_time,
+        )
         self._mine_required_blocks()
+        assert self.user_sci.get_transaction_receipt(tx_hash).status
         assert self.user_sci.get_deposit_value(requestor) == 0
-        assert self.user_sci.get_gntb_balance(provider) == value
+        assert self.user_sci.get_gntb_balance(provider) == reimburse_amount
         to_block = self.user_sci.get_block_number()
         forced_payments = self.user_sci.get_forced_payments(
             requestor,
@@ -94,13 +136,13 @@ class TestConcentIntegration(IntegrationBase):
         assert len(forced_payments) == 1
         assert forced_payments[0].requestor == requestor
         assert forced_payments[0].provider == provider
-        assert forced_payments[0].amount == value
+        assert forced_payments[0].amount == reimburse_amount
         assert forced_payments[0].closure_time == closure_time
 
         assert len(events) == 1
         assert events[0].requestor == requestor
         assert events[0].provider == provider
-        assert events[0].amount == value
+        assert events[0].amount == reimburse_amount
         assert events[0].closure_time == closure_time
 
     def test_forced_subtask_payment(self):
@@ -112,6 +154,9 @@ class TestConcentIntegration(IntegrationBase):
         events = []
         self.user_sci.deposit_payment(value)
         self._wait_for_pending()
+        v = 27
+        r = b'\xffD\x16\xa3\x18\xca\x95\xd8\xc5\xaek\x99p\xcb\xb3}\xbd\x83\xe3\xb6WN\xce~\xb4\x8f\xdaq\x06)g\xe4'  # noqa
+        s = b'\x01\x93_\x8f\x82\xe2\xe3\xd3\xe9\xec\x84\x9a\x83\xec\xb6\xe9\xaf\xebS\x86\xf6`IR\x83\xb0\xc4bw\x0c\xab\x13'  # noqa
 
         with self.assertRaisesRegex(ValueError, 'subtask_id has to be exactly'):
             self.concent_sci.force_subtask_payment(
@@ -119,6 +164,9 @@ class TestConcentIntegration(IntegrationBase):
                 provider,
                 value,
                 b'a' * 31,
+                v,
+                r,
+                s,
             )
 
         from_block = self.user_sci.get_block_number()
@@ -135,19 +183,26 @@ class TestConcentIntegration(IntegrationBase):
             provider,
             value,
             subtask_id,
+            v,
+            r,
+            s,
         )
         self._mine_required_blocks()
         receipt = self.user_sci.get_transaction_receipt(tx_hash)
         assert not receipt.status
 
         # only concent can
-        self.concent_sci.force_subtask_payment(
+        tx_hash = self.concent_sci.force_subtask_payment(
             requestor,
             provider,
             value,
             subtask_id,
+            v,
+            r,
+            s,
         )
         self._mine_required_blocks()
+        assert self.user_sci.get_transaction_receipt(tx_hash).status
         assert self.user_sci.get_deposit_value(requestor) == 0
         assert self.user_sci.get_gntb_balance(provider) == value
         to_block = self.user_sci.get_block_number()
@@ -178,11 +233,18 @@ class TestConcentIntegration(IntegrationBase):
         self.user_sci.deposit_payment(value)
         self._wait_for_pending()
 
+        v = 27
+        r = b'\x80Q\x9d!\x90\x0b\x8d\x80\xe1\xf1\xf1D\xb1\xa2v\x94\x1c`|\xcc2?\x7f\xa3~\x81\xf8\x00&$,p'  # noqa
+        s = b'F\xf4\x98\x00\x84\x943r\xebY\x99\xf1H\x90\xc6\xec>\x90\xf5"\x8f\xee\n\x9e\xd9\x89\x01c\xb8\x94\xef\xa0'  # noqa
+
         with self.assertRaisesRegex(ValueError, 'subtask_id has to be exactly'):
             self.concent_sci.cover_additional_verification_cost(
                 address,
                 value,
                 b'a' * 31,
+                v,
+                r,
+                s,
             )
 
         from_block = self.user_sci.get_block_number()
@@ -192,18 +254,25 @@ class TestConcentIntegration(IntegrationBase):
             address,
             value,
             subtask_id,
+            v,
+            r,
+            s,
         )
         self._mine_required_blocks()
         receipt = self.user_sci.get_transaction_receipt(tx_hash)
         assert not receipt.status
 
         # only concent can
-        self.concent_sci.cover_additional_verification_cost(
+        tx_hash = self.concent_sci.cover_additional_verification_cost(
             address,
             value,
             subtask_id,
+            v,
+            r,
+            s,
         )
         self._mine_required_blocks()
+        assert self.user_sci.get_transaction_receipt(tx_hash).status
         assert self.user_sci.get_deposit_value(address) == 0
         to_block = self.user_sci.get_block_number()
         additional_costs = \
