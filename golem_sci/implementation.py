@@ -594,7 +594,8 @@ class SCIImplementation(SmartContractsInterface):
             subtask_id: bytes,
             v: int,
             r: bytes,
-            s: bytes) -> str:
+            s: bytes,
+            reimburse_amount: int) -> str:
         if len(subtask_id) != 32:
             raise ValueError('subtask_id has to be exactly 32 bytes long')
         return self._create_and_send_transaction(
@@ -608,6 +609,7 @@ class SCIImplementation(SmartContractsInterface):
                 v,
                 r,
                 s,
+                reimburse_amount,
             ],
             self.GAS_REIMBURSE,
         )
@@ -748,13 +750,14 @@ class SCIImplementation(SmartContractsInterface):
             subtask_id: bytes,
             v: int,
             r: bytes,
-            s: bytes) -> str:
+            s: bytes,
+            reimburse_amount: int) -> str:
         if len(subtask_id) != 32:
             raise ValueError('subtask_id has to be exactly 32 bytes long')
         return self._create_and_send_transaction(
             self._gntdeposit,
             'reimburseForVerificationCosts',
-            [address, value, subtask_id, v, r, s],
+            [address, value, subtask_id, v, r, s, reimburse_amount],
             self.GAS_REIMBURSE,
         )
 

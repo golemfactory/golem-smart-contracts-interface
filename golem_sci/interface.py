@@ -241,7 +241,8 @@ class SmartContractsInterface(object, metaclass=abc.ABCMeta):
             requestor_address: str,
             provider_address: str,
             value: int,
-            subtask_id: bytes) -> str:
+            subtask_id: bytes,
+            reimburse_amount: int) -> str:
         pass
 
     @abc.abstractmethod
@@ -304,7 +305,8 @@ class SmartContractsInterface(object, metaclass=abc.ABCMeta):
             subtask_id: bytes,
             v: int,
             r: bytes,
-            s: bytes) -> str:
+            s: bytes,
+            reimburse_amount: int) -> str:
         pass
 
     @abc.abstractmethod
