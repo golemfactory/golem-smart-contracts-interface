@@ -12,6 +12,7 @@ from .client import Client, FilterNotFoundException
 from .interface import SmartContractsInterface
 from .events import (
     BatchTransferEvent,
+    GntTransferEvent,
     ForcedPaymentEvent,
     ForcedSubtaskPaymentEvent,
     CoverAdditionalVerificationEvent,
@@ -265,6 +266,24 @@ class SCIImplementation(SmartContractsInterface):
             'transfer',
             [to_address, amount],
             self.GAS_GNT_TRANSFER,
+        )
+
+    def subscribe_to_gnt_transfers(
+            self,
+            from_address: Optional[str],
+            to_address: Optional[str],
+            from_block: int,
+            cb: Callable[[GntTransferEvent], None]) -> None:
+        self._create_subscription(
+            self._gnt,
+            'Transfer',
+            {
+                'from': from_address,
+                'to': to_address,
+            },
+            GntTransferEvent,
+            from_block,
+            cb,
         )
 
     def transfer_gntb(self, to_address: str, amount: int) -> str:

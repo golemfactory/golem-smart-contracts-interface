@@ -1,8 +1,9 @@
-from typing import Callable, Optional, List, Tuple
+from typing import Callable, Optional, List
 import abc
 
 from .events import (
     BatchTransferEvent,
+    GntTransferEvent,
     ForcedPaymentEvent,
     ForcedSubtaskPaymentEvent,
     CoverAdditionalVerificationEvent,
@@ -134,6 +135,15 @@ class SmartContractsInterface(object, metaclass=abc.ABCMeta):
     # Transaction
     @abc.abstractmethod
     def transfer_gnt(self, to_address: str, amount: int) -> str:
+        pass
+
+    @abc.abstractmethod
+    def subscribe_to_gnt_transfers(
+            self,
+            from_address: Optional[str],
+            to_address: Optional[str],
+            from_block: int,
+            cb: Callable[[GntTransferEvent], None]) -> None:
         pass
 
     # Transaction

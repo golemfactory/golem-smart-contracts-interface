@@ -56,6 +56,39 @@ class TestIntegration(IntegrationBase):
         self._mine_required_blocks()
         assert self.user_sci.get_gnt_balance(user_addr) == 1000 * denoms.ether
 
+    def test_gnt_transfer_subscription(self):
+        self.user_sci.request_gnt_from_faucet()
+        self._mine_required_blocks()
+        recipient = TEST_RECIPIENT_ADDR
+        assert self.user_sci.get_gnt_balance(recipient) == 0
+        amount = 123
+        events = []
+        from_block = self.user_sci.get_block_number()
+        self.user_sci.subscribe_to_gnt_transfers(
+            self.user_sci.get_eth_address(),
+            None,
+            from_block,
+            lambda e: events.append(e),
+        )
+        self.user_sci.subscribe_to_gnt_transfers(
+            None,
+            recipient,
+            from_block,
+            lambda e: events.append(e),
+        )
+        tx_hash = self.user_sci.transfer_gnt(recipient, amount)
+        self._wait_for_pending()
+        assert self.user_sci.get_gnt_balance(recipient) == 0
+        assert not events
+        self._mine_required_blocks()
+        assert self.user_sci.get_gnt_balance(recipient) == amount
+        assert len(events) == 2
+        for e in events:
+            assert e.from_address == self.user_sci.get_eth_address()
+            assert e.to_address == recipient
+            assert e.amount == amount
+            assert e.tx_hash == tx_hash
+
     def test_gntb_transfer(self):
         self._create_gntb()
         recipient = TEST_RECIPIENT_ADDR

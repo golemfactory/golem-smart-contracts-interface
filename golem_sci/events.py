@@ -25,6 +25,16 @@ class BatchTransferEvent:
             )
 
 
+class GntTransferEvent:
+    def __init__(self, raw_log: Dict[str, Any]) -> None:
+        self.tx_hash: str = raw_log['transactionHash'].hex()
+        self.from_address: str = \
+            to_checksum_address('0x' + raw_log['topics'][1].hex()[26:])
+        self.to_address: str = \
+            to_checksum_address('0x' + raw_log['topics'][2].hex()[26:])
+        self.amount: int = int(raw_log['data'][2:66], 16)
+
+
 class ForcedSubtaskPaymentEvent:
     def __init__(self, raw_log: Dict[str, Any]) -> None:
         self.tx_hash: str = raw_log['transactionHash'].hex()
