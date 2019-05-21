@@ -430,17 +430,6 @@ class SCIImplementation(SmartContractsInterface):
             event_cls,
             from_block: int,
             cb: Callable[[Any], None]) -> None:
-        if from_block <= self._confirmed_block:
-            logs = self._geth_client.get_logs(
-                contract,
-                event_name,
-                args,
-                from_block,
-                self._confirmed_block,
-            )
-            for log in logs:
-                self._on_event(event_cls(log), cb)
-
         with self._subs_lock:
             self._subscriptions.append(Subscription(
                 contract,
@@ -448,7 +437,7 @@ class SCIImplementation(SmartContractsInterface):
                 args,
                 event_cls,
                 cb,
-                max(from_block - 1, self._confirmed_block),
+                from_block - 1,
             ))
 
     def _monitor_blockchain(self):

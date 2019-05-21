@@ -96,14 +96,6 @@ class SCIImplementationTest(unittest.TestCase):
             lambda e: events.append(e),
         )
 
-        self.geth_client.get_logs.assert_called_once_with(
-            mock.ANY,
-            'BatchTransfer',
-            {'from': None, 'to': receiver_address},
-            from_block,
-            block_number - self.sci.REQUIRED_CONFS + 1,
-        )
-
         self.geth_client.get_logs.return_value = [
             {
                 'removed': False,
