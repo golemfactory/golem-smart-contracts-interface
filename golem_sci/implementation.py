@@ -19,6 +19,7 @@ from .events import (
 )
 from .structs import (
     Block,
+    DirectEthTransfer,
     Payment,
     TransactionReceipt,
 )
@@ -65,6 +66,17 @@ class Subscription:
         self.event_name = event_name
         self.args = args
         self.event_cls = event_cls
+        self.cb = cb
+        self.last_pulled_block = from_block
+
+
+class EthSubscription:
+    def __init__(
+            self,
+            address: str,
+            cb,
+            from_block: int) -> None:
+        self.address = address
         self.cb = cb
         self.last_pulled_block = from_block
 
@@ -133,6 +145,8 @@ class SCIImplementation(SmartContractsInterface):
 
         self._subs_lock = threading.Lock()
         self._subscriptions: List[Subscription] = []
+        self._eth_subs_lock = threading.Lock()
+        self._eth_subscriptions: List[EthSubscription] = []
 
         self._awaiting_transactions_lock = threading.Lock()
         self._awaiting_transactions: List[Tuple] = []
@@ -252,6 +266,18 @@ class SCIImplementation(SmartContractsInterface):
             nonce=0,  # nonce will be overridden
         )
         return self._sign_and_send_transaction(tx)
+
+    def subscribe_to_direct_incoming_eth_transfers(
+            self,
+            address: str,
+            from_block: int,
+            cb: Callable[[DirectEthTransfer], None]) -> None:
+        with self._eth_subs_lock:
+            self._eth_subscriptions.append(EthSubscription(
+                address,
+                cb,
+                from_block - 1,
+            ))
 
     def estimate_transfer_eth_gas(self, to_address: str, amount: int) -> int:
         return self._geth_client.estimate_gas({
@@ -454,6 +480,7 @@ class SCIImplementation(SmartContractsInterface):
             return
         self._update_gas_price()
         self._pull_subscription_events()
+        self._pull_eth_subscription_events()
         self._process_awaiting_transactions()
         self._process_sent_transactions()
 
@@ -498,6 +525,83 @@ class SCIImplementation(SmartContractsInterface):
             except Exception as e:
                 logger.exception(
                     'Exception while processing subscription: %r',
+                    e,
+                )
+
+    def _find_incoming_eth_transfers(
+            self,
+            from_block: int,
+            to_block: int,
+            address: str,
+            from_block_balance: Optional[int] = None,
+            to_block_balance: Optional[int] = None) -> List[DirectEthTransfer]:
+        """
+        Finds and returns transactions that send Ether to an address within
+        block range (from_block, to_block].
+        Proper way is to iterate over all transactions from all the blocks but
+        it's way too resource consuming, so this is an approximation that may
+        not find transactions if an address sent out (or spent on gas) more
+        ether than it received within this block range.
+        """
+        if from_block_balance is None:
+            from_block_balance = self._geth_client.get_balance(
+                address,
+                block=from_block,
+            )
+        if to_block_balance is None:
+            to_block_balance = self._geth_client.get_balance(
+                address,
+                block=to_block,
+            )
+        if to_block_balance <= from_block_balance:
+            return []
+        if to_block - from_block < 4:
+            result = []
+            for block_number in range(from_block + 1, to_block + 1):
+                raw_block = self._geth_client.get_block(block_number, True)
+                for tx in raw_block['transactions']:
+                    if tx['to'] == address:
+                        result.append(DirectEthTransfer(tx))
+            return result
+        mid = (from_block + to_block) // 2
+        mid_block_balance = self._geth_client.get_balance(
+            address,
+            block=mid,
+        )
+        result = self._find_incoming_eth_transfers(
+            from_block,
+            mid,
+            address,
+            from_block_balance,
+            mid_block_balance,
+        )
+        result.extend(self._find_incoming_eth_transfers(
+            mid,
+            to_block,
+            address,
+            mid_block_balance,
+            to_block_balance,
+        ))
+        return result
+
+    def _pull_eth_subscription_events(self) -> None:
+        with self._eth_subs_lock:
+            subs = self._eth_subscriptions.copy()
+        for sub in subs:
+            try:
+                if sub.last_pulled_block >= self._confirmed_block:
+                    continue
+                transfers = self._find_incoming_eth_transfers(
+                    sub.last_pulled_block,
+                    self._confirmed_block,
+                    sub.address,
+                )
+                for t in transfers:
+                    self._on_event(t, sub.cb)
+                sub.last_pulled_block = self._confirmed_block
+            except Exception as e:
+                logger.exception(
+                    'Exception while processing eth subscription: %r',
                     e,
                 )
 

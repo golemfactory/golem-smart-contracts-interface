@@ -35,6 +35,31 @@ class TestIntegration(IntegrationBase):
         assert self.user_sci.get_eth_balance(sender) == sender_new_balance
         assert self.user_sci.get_eth_balance(recipient) == amount
 
+    def test_subscribe_to_eth_transfers(self):
+        from_block = self.user_sci.get_latest_confirmed_block_number()
+        amounts = [22, 33, 44]
+        tx_hash = ['', '', '']
+        tx_hash[0] = self.user_sci.transfer_eth(TEST_RECIPIENT_ADDR, amounts[0])
+        self._mine_blocks(10)
+
+        txs = []
+        self.user_sci.subscribe_to_direct_incoming_eth_transfers(
+            TEST_RECIPIENT_ADDR,
+            from_block,
+            lambda tx: txs.append(tx),
+        )
+
+        tx_hash[1] = self.user_sci.transfer_eth(TEST_RECIPIENT_ADDR, amounts[1])
+        tx_hash[2] = self.user_sci.transfer_eth(TEST_RECIPIENT_ADDR, amounts[2])
+        self._mine_required_blocks()
+
+        assert len(txs) == len(amounts)
+        for i in range(len(amounts)):
+            assert txs[i].tx_hash == tx_hash[i]
+            assert txs[i].from_address == self.user_sci.get_eth_address()
+            assert txs[i].to_address == TEST_RECIPIENT_ADDR
+            assert txs[i].amount == amounts[i]
+
     def test_estimate_transfer_eth_gas(self):
         cost = self.user_sci.estimate_transfer_eth_gas(
             TEST_RECIPIENT_ADDR,

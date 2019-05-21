@@ -10,6 +10,7 @@ from .events import (
 )
 from .structs import (
     Block,
+    DirectEthTransfer,
     Payment,
     TransactionReceipt,
 )
@@ -126,6 +127,19 @@ class SmartContractsInterface(object, metaclass=abc.ABCMeta):
             to_address: str,
             amount: int,
             gas_price: Optional[int] = None) -> str:
+        pass
+
+    @abc.abstractmethod
+    def subscribe_to_direct_incoming_eth_transfers(
+            self,
+            address: str,
+            from_block: int,
+            cb: Callable[[DirectEthTransfer], None]) -> None:
+        """
+        Ether transfer detection is not an easy topic. This is a best effort
+        method to subscribe to incoming transfers that originate from a wallet
+        account (so not a contract, hence direct).
+        """
         pass
 
     @abc.abstractmethod

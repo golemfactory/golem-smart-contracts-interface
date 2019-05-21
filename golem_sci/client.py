@@ -71,8 +71,8 @@ class Client(object):
             timestamp = last_block.timestamp
         return get_timestamp_utc() - timestamp > 120
 
-    def get_block(self, block: Union[int, str]):
-        return self.web3.eth.getBlock(block)
+    def get_block(self, block: Union[int, str], full_transactions: bool=False):
+        return self.web3.eth.getBlock(block, full_transactions)
 
     def get_transaction_count(self, address):
         """
