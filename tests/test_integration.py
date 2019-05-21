@@ -56,6 +56,20 @@ class TestIntegration(IntegrationBase):
         self._mine_required_blocks()
         assert self.user_sci.get_gnt_balance(user_addr) == 1000 * denoms.ether
 
+    def test_subscribe_from_block(self):
+        from_block = self.user_sci.get_block_number()
+        self.user_sci.request_gnt_from_faucet()
+        self._mine_required_blocks()
+        events = []
+        self.user_sci.subscribe_to_gnt_transfers(
+            None,
+            self.user_sci.get_eth_address(),
+            from_block,
+            lambda e: events.append(e),
+        )
+        self._mine_blocks()
+        assert len(events) == 1
+
     def test_gnt_transfer_subscription(self):
         self.user_sci.request_gnt_from_faucet()
         self._mine_required_blocks()
