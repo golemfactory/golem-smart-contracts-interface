@@ -137,7 +137,7 @@ class SCIImplementation(SmartContractsInterface):
         self._awaiting_transactions_lock = threading.Lock()
         self._awaiting_transactions: List[Tuple] = []
 
-        self._current_block = 0
+        self._confirmed_block = -self.REQUIRED_CONFS
         self._update_block_numbers()
         self._update_gas_price()
 
@@ -229,8 +229,9 @@ class SCIImplementation(SmartContractsInterface):
         with self._awaiting_transactions_lock:
             self._awaiting_transactions.append((tx_hash, cb))
 
-    def get_latest_block(self) -> Block:
-        return self.get_block_by_number(self.get_block_number())
+    def get_latest_confirmed_block(self) -> Block:
+        return self.get_block_by_number(
+            self.get_latest_confirmed_block_number())
 
     def get_block_by_number(self, number: int) -> Block:
         return Block(self._geth_client.get_block(number))
@@ -306,8 +307,8 @@ class SCIImplementation(SmartContractsInterface):
             self.GAS_TRANSFER_AND_CALL,
         )
 
-    def get_block_number(self) -> int:
-        return self._current_block
+    def get_latest_confirmed_block_number(self) -> int:
+        return self._confirmed_block
 
     def get_transaction_receipt(
             self,
@@ -464,10 +465,10 @@ class SCIImplementation(SmartContractsInterface):
 
     def _update_block_numbers(self) -> bool:
         latest_block = self._geth_client.get_block_number()
-        if latest_block <= self._current_block:
+        confirmed_block = latest_block - self.REQUIRED_CONFS + 1
+        if confirmed_block <= self._confirmed_block:
             return False
-        self._current_block = latest_block
-        self._confirmed_block = self._current_block - self.REQUIRED_CONFS + 1
+        self._confirmed_block = confirmed_block
         return True
 
     def _on_event(self, event, cb) -> None:

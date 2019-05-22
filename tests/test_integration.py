@@ -57,7 +57,7 @@ class TestIntegration(IntegrationBase):
         assert self.user_sci.get_gnt_balance(user_addr) == 1000 * denoms.ether
 
     def test_subscribe_from_block(self):
-        from_block = self.user_sci.get_block_number()
+        from_block = self.user_sci.get_latest_confirmed_block_number()
         self.user_sci.request_gnt_from_faucet()
         self._mine_required_blocks()
         events = []
@@ -77,7 +77,7 @@ class TestIntegration(IntegrationBase):
         assert self.user_sci.get_gnt_balance(recipient) == 0
         amount = 123
         events = []
-        from_block = self.user_sci.get_block_number()
+        from_block = self.user_sci.get_latest_confirmed_block_number()
         self.user_sci.subscribe_to_gnt_transfers(
             self.user_sci.get_eth_address(),
             None,
@@ -137,10 +137,10 @@ class TestIntegration(IntegrationBase):
             lambda r: receipt.append(r),
         )
         self._wait_for_pending()
-        block_number = self.user_sci.get_block_number()
         self._mine_blocks(SCIImplementation.REQUIRED_CONFS - 2)
         assert len(receipt) == 0
         self._mine_blocks(1)
+        block_number = self.user_sci.get_latest_confirmed_block_number()
         assert len(receipt) == 1
         assert tx_hash == receipt[0].tx_hash
         assert receipt[0].status
@@ -157,7 +157,7 @@ class TestIntegration(IntegrationBase):
         payment1 = Payment(payee1, amount1)
         payment2 = Payment(payee2, amount2)
 
-        from_block = self.user_sci.get_block_number()
+        from_block = self.user_sci.get_latest_confirmed_block_number()
         events_incoming = []
         events_outgoing = []
         self.user_sci.subscribe_to_batch_transfers(
@@ -177,10 +177,10 @@ class TestIntegration(IntegrationBase):
             [payment1, payment2],
             closure_time,
         )
-        self._wait_for_pending()
         assert len(events_incoming) == 0
         assert len(events_outgoing) == 0
-        to_block = self.user_sci.get_block_number()
+        self._mine_required_blocks()
+        to_block = self.user_sci.get_latest_confirmed_block_number()
 
         batch_transfers1 = self.user_sci.get_batch_transfers(
             self.user_sci.get_eth_address(),
@@ -278,19 +278,20 @@ class TestIntegration(IntegrationBase):
         self._spawn_geth_process()
         with mock.patch('golem_sci.factory._ensure_genesis'), \
                 mock.patch('golem_sci.implementation.threading'):
+            tx_storage = JsonTransactionsStorage(self.tempdir / 'user_tx.json')
             self.user_sci = new_sci(
                 self.web3,
                 self.user_sci.get_eth_address(),
                 'test_chain',
-                JsonTransactionsStorage(self.tempdir / 'user_tx.json'),
+                tx_storage,
                 self.contract_addresses,
             )
             self.concent_sci = None
         self._fund_account(self.user_sci.get_eth_address())
         self._wait_for_pending()
-        assert len(self.user_sci._storage.get_all_tx()) == 1
+        assert len(tx_storage.get_all_tx()) == 1
         self._mine_required_blocks()
-        assert len(self.user_sci._storage.get_all_tx()) == 0
+        assert len(tx_storage.get_all_tx()) == 0
 
     def test_nonce_too_low(self):
         self.user_sci.transfer_eth(ZERO_ADDR, 1)

@@ -61,7 +61,7 @@ class SCIImplementationTest(unittest.TestCase):
         gas_price = hard_cap // 2
         self.geth_client.get_gas_price.return_value = gas_price
         self.geth_client.get_transaction_count.return_value = 0
-        self.geth_client.get_block_number.return_value = 2
+        self.geth_client.get_block_number.return_value = 22
         self.sci._monitor_blockchain_single()
         self.sci.transfer_eth(get_eth_address(), 123)
         self.geth_client.send.assert_called()
@@ -70,7 +70,7 @@ class SCIImplementationTest(unittest.TestCase):
 
         gas_price = 2 * hard_cap
         self.geth_client.get_gas_price.return_value = gas_price
-        self.geth_client.get_block_number.return_value = 3
+        self.geth_client.get_block_number.return_value = 33
         self.sci._monitor_blockchain_single()
         self.sci.transfer_eth(get_eth_address(), 123)
         self.geth_client.send.assert_called()
