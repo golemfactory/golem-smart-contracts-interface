@@ -69,7 +69,7 @@ class TestConcentIntegration(IntegrationBase):
         self.user_sci.deposit_payment(reimburse_amount)
         events = []
 
-        from_block = self.user_sci.get_block_number()
+        from_block = self.user_sci.get_latest_confirmed_block_number()
         # user can't force a payment
         tx_hash = self.user_sci.force_payment(
             requestor,
@@ -125,7 +125,7 @@ class TestConcentIntegration(IntegrationBase):
         assert self.user_sci.get_transaction_receipt(tx_hash).status
         assert self.user_sci.get_deposit_value(requestor) == 0
         assert self.user_sci.get_gntb_balance(provider) == reimburse_amount
-        to_block = self.user_sci.get_block_number()
+        to_block = self.user_sci.get_latest_confirmed_block_number()
         forced_payments = self.user_sci.get_forced_payments(
             requestor,
             provider,
@@ -171,7 +171,7 @@ class TestConcentIntegration(IntegrationBase):
                 reimburse_amount,
             )
 
-        from_block = self.user_sci.get_block_number()
+        from_block = self.user_sci.get_latest_confirmed_block_number()
         self.user_sci.subscribe_to_forced_subtask_payments(
             None,
             provider,
@@ -225,7 +225,7 @@ class TestConcentIntegration(IntegrationBase):
         assert self.user_sci.get_deposit_value(requestor) == \
             value - reimburse_amount
         assert self.user_sci.get_gntb_balance(provider) == reimburse_amount
-        to_block = self.user_sci.get_block_number()
+        to_block = self.user_sci.get_latest_confirmed_block_number()
         forced_payments = self.user_sci.get_forced_subtask_payments(
             requestor,
             provider,
@@ -269,7 +269,7 @@ class TestConcentIntegration(IntegrationBase):
                 reimburse_amount,
             )
 
-        from_block = self.user_sci.get_block_number()
+        from_block = self.user_sci.get_latest_confirmed_block_number()
 
         # user can't force a payment
         tx_hash = self.user_sci.cover_additional_verification_cost(
@@ -313,7 +313,7 @@ class TestConcentIntegration(IntegrationBase):
         assert self.user_sci.get_transaction_receipt(tx_hash).status
         assert self.user_sci.get_deposit_value(address) == \
             value - reimburse_amount
-        to_block = self.user_sci.get_block_number()
+        to_block = self.user_sci.get_latest_confirmed_block_number()
         additional_costs = \
             self.user_sci.get_covered_additional_verification_costs(
                 address,
