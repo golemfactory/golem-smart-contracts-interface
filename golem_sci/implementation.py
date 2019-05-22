@@ -147,11 +147,10 @@ class SCIImplementation(SmartContractsInterface):
             self._eth_reserved += tx.startgas * tx.gasprice + tx.value
 
         self._monitor_thread = None
-        self._monitor_stop = threading.Event()
+        self._monitor_cv = threading.Condition()
         if monitor:
             self._monitor_thread = threading.Thread(
                 target=self._monitor_blockchain,
-                daemon=True,
             )
             self._monitor_thread.start()
 
@@ -346,7 +345,8 @@ class SCIImplementation(SmartContractsInterface):
 
     def stop(self) -> None:
         self._geth_client.stop()
-        self._monitor_stop.set()
+        with self._monitor_cv:
+            self._monitor_cv.notify()
 
     def _call(self, method) -> Any:
         return method.call(
@@ -442,12 +442,12 @@ class SCIImplementation(SmartContractsInterface):
             ))
 
     def _monitor_blockchain(self):
-        while not self._monitor_stop.is_set():
-            try:
-                self._monitor_blockchain_single()
-            except Exception as e:
-                logger.exception('Blockchain monitor exception: %r', e)
-            time.sleep(15)
+        with self._monitor_cv:
+            while not self._monitor_cv.wait(timeout=15):
+                try:
+                    self._monitor_blockchain_single()
+                except Exception as e:
+                    logger.exception('Blockchain monitor exception: %r', e)
 
     def _monitor_blockchain_single(self):
         if not self._update_block_numbers():
