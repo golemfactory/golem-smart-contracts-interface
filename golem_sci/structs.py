@@ -33,6 +33,14 @@ class TransactionReceipt:
             )
 
 
+class DirectEthTransfer:
+    def __init__(self, raw_tx: Dict[str, Any]) -> None:
+        self.tx_hash: str = raw_tx['hash'].hex()
+        self.from_address: str = raw_tx['from']
+        self.to_address: str = raw_tx['to']
+        self.amount: int = raw_tx['value']
+
+
 class Payment:
     def __init__(self, payee: str, amount: int) -> None:
         self.payee: str = payee
