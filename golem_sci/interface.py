@@ -23,6 +23,10 @@ class SmartContractsInterface(object, metaclass=abc.ABCMeta):
     """
 
     @abc.abstractmethod
+    def stop(self) -> None:
+        pass
+
+    @abc.abstractmethod
     def get_eth_address(self) -> str:
         """
         Return associated with this instance Ethereum address
