@@ -241,9 +241,11 @@ class Client(object):
         event_abi = list(filter(
             lambda e: e['type'] == 'event' and e['name'] == event_name,
             contract.abi,
-        ))
+        ))[0]
+        for name in args:
+            assert any(name == event['name'] for event in event_abi['inputs'])
         _, filter_args = construct_event_filter_params(
-            event_abi[0],
+            event_abi,
             contract_address=contract.address,
             argument_filters=args,
             fromBlock=from_block,

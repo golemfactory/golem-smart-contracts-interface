@@ -99,9 +99,12 @@ class TestIntegration(IntegrationBase):
         self.user_sci.request_gnt_from_faucet()
         self._mine_required_blocks()
         recipient = TEST_RECIPIENT_ADDR
+        recipient2 = '0x' + 40 * '8'
+        assert recipient != recipient2
         assert self.user_sci.get_gnt_balance(recipient) == 0
         amount = 123
         events = []
+        events2 = []
         from_block = self.user_sci.get_latest_confirmed_block_number()
         self.user_sci.subscribe_to_gnt_transfers(
             self.user_sci.get_eth_address(),
@@ -115,6 +118,12 @@ class TestIntegration(IntegrationBase):
             from_block,
             lambda e: events.append(e),
         )
+        self.user_sci.subscribe_to_gnt_transfers(
+            None,
+            recipient2,
+            from_block,
+            lambda e: events2.append(e),
+        )
         tx_hash = self.user_sci.transfer_gnt(recipient, amount)
         self._wait_for_pending()
         assert self.user_sci.get_gnt_balance(recipient) == 0
@@ -127,6 +136,7 @@ class TestIntegration(IntegrationBase):
             assert e.to_address == recipient
             assert e.amount == amount
             assert e.tx_hash == tx_hash
+        assert len(events2) == 0
 
     def test_gntb_transfer(self):
         self._create_gntb()
