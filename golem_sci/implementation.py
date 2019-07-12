@@ -1,6 +1,5 @@
 import logging
 import threading
-import time
 from typing import Any, Callable, ClassVar, Dict, List, Optional, Tuple
 
 from eth_utils import decode_hex, encode_hex
@@ -8,7 +7,7 @@ from ethereum.utils import zpad, int_to_big_endian, denoms
 from ethereum.transactions import Transaction
 
 from . import contracts
-from .client import Client, FilterNotFoundException
+from .client import Client
 from .interface import SmartContractsInterface
 from .events import (
     BatchTransferEvent,
@@ -304,8 +303,8 @@ class SCIImplementation(SmartContractsInterface):
             self._gnt,
             'Transfer',
             {
-                'from': from_address,
-                'to': to_address,
+                '_from': from_address,
+                '_to': to_address,
             },
             GntTransferEvent,
             from_block,
