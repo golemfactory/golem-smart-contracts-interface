@@ -10,9 +10,9 @@ jobs:
        - run:
            name: install geth
            command: |
-             wget https://gethstore.blob.core.windows.net/builds/geth-linux-amd64-1.8.10-eae63c51.tar.gz
-             tar -xzvf geth-linux-amd64-1.8.10-eae63c51.tar.gz
-             sudo mv geth-linux-amd64-1.8.10-eae63c51/geth /usr/local/bin/geth
+             wget https://gethstore.blob.core.windows.net/builds/geth-linux-amd64-1.9.0-52f24617.tar.gz
+             tar -xzvf geth-linux-amd64-1.9.0-52f24617.tar.gz
+             sudo mv geth-linux-amd64-1.9.0-52f24617/geth /usr/local/bin/geth
        - run: sudo apt-get install -y libsecp256k1-0 libsecp256k1-dev
        - run:
            command: |

@@ -57,7 +57,7 @@ class IntegrationBase(TestCase):
         )
         atexit.register(lambda: proc.kill())
         self.proc = proc
-        self.web3 = Web3(IPCProvider(ipcpath))
+        self.web3 = Web3(IPCProvider(ipcpath, timeout=60))
         self.web3.middleware_stack.inject(geth_poa_middleware, layer=0)
         while not self.web3.isConnected():
             time.sleep(0.1)

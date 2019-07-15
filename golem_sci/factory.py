@@ -25,7 +25,7 @@ GENESES = {
 }
 
 MIN_GETH_VERSION = StrictVersion('1.7.2')
-MAX_GETH_VERSION = StrictVersion('1.8.999')
+MAX_GETH_VERSION = StrictVersion('1.9.999')
 
 
 def new_sci_ipc(
