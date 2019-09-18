@@ -599,7 +599,14 @@ class SCIImplementation(SmartContractsInterface):
                     self._on_event(t, sub.cb)
                 sub.last_pulled_block = self._confirmed_block
             except Exception as e:
-                logger.exception(
+                if (
+                        _is_jsonrpc_error(e)
+                        and 'missing trie node' in e.args[0].get('message')
+                ):
+                    log = logger.warning
+                else:
+                    log = logger.exception
+                log(
                     'Exception while processing eth subscription: %r',
                     e,
                 )
