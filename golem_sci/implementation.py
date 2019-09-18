@@ -604,6 +604,10 @@ class SCIImplementation(SmartContractsInterface):
                         and 'missing trie node' in e.args[0].get('message')
                 ):
                     log = logger.warning
+                    # we cannot do anything here
+                    # so let's just bump the pointer
+                    # so that we don't poll the geth node repeatedly
+                    sub.last_pulled_block = self._confirmed_block
                 else:
                     log = logger.exception
                 log(
