@@ -601,7 +601,7 @@ class SCIImplementation(SmartContractsInterface):
             except Exception as e:
                 if (
                         _is_jsonrpc_error(e)
-                        and 'missing trie node' in e.args[0].get('message')
+                        and 'missing trie node' in e.args[0]['message']
                 ):
                     log = logger.warning
                     # we cannot do anything here
