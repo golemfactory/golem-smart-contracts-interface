@@ -7,6 +7,7 @@ from ethereum.utils import zpad, int_to_big_endian, denoms
 from ethereum.transactions import Transaction
 
 from . import contracts
+from . import exceptions
 from .client import Client
 from .interface import SmartContractsInterface
 from .events import (
@@ -37,19 +38,6 @@ def encode_payment(p: Payment) -> bytes:
         raise ValueError(
             "Incorrect pair length: {}. Should be 32".format(len(pair)))
     return pair
-
-
-# web3 just throws ValueError(response['error']) and this is the best we can
-# do to check whether this is coming from there
-def _is_jsonrpc_error(e: Exception) -> bool:
-    if not isinstance(e, ValueError):
-        return False
-    if len(e.args) != 1:
-        return False
-    arg = e.args[0]
-    if not isinstance(arg, dict):
-        return False
-    return len(arg) == 2 and 'message' in arg and 'code' in arg
 
 
 class Subscription:
@@ -392,37 +380,35 @@ class SCIImplementation(SmartContractsInterface):
             self._storage.set_nonce_sign_and_save_tx(self._tx_sign, tx)
             with self._eth_reserved_lock:
                 self._eth_reserved += total_eth
+            tx_hash = encode_hex(tx.hash)
             try:
-                return self._geth_client.send(tx)
-            except Exception as e:
-                tx_hash = encode_hex(tx.hash)
-                if _is_jsonrpc_error(e):
-                    # yay for grepping for the error message because error codes
-                    # from Geth are not unique
-                    error_msg = e.args[0]['message']
+                try:
+                    return self._geth_client.send(tx)
+                except exceptions.KnownTransaction:
                     # This can happen when reconnecting to other Geth instance
                     # but initial request went through anyway and the
                     # transaction was propagated, so this is fine
-                    if error_msg.startswith('known transaction'):
-                        return tx_hash
+                    return tx_hash
+                except exceptions.NonceTooLow:
                     # Similar to the above but there are two cases:
                     # 1. Transaction got mined in the meantime and this is fine
                     # 2. Otherwise an actual error
-                    if error_msg.startswith('nonce too low'):
-                        if self._geth_client.get_transaction_receipt(tx_hash):
-                            return tx_hash
-                    # This can be stuff like not enough gas for the transaction.
-                    # It shouldn't ever happen and if it does then it's a bug
-                    # that should be fixed by the caller.
-                    logger.critical('web3 JSON rpc critical error %r', e)
-                    with self._eth_reserved_lock:
-                        self._eth_reserved -= total_eth
-                    self._storage.revert_last_tx()
+                    if self._geth_client.get_transaction_receipt(tx_hash):
+                        return tx_hash
                     raise
+            except exceptions.GethError as e:
+                # This can be stuff like not enough gas for the transaction.
+                # It shouldn't ever happen and if it does then it's a bug
+                # that should be fixed by the caller.
+                logger.critical('web3 JSON rpc critical error %r', e)
+                with self._eth_reserved_lock:
+                    self._eth_reserved -= total_eth
+                self._storage.revert_last_tx()
+                raise
+            except Exception:  # pylint: disable=broad-except
                 # We don't need to do anything explicitly, it will be retried
                 logger.exception(
-                    'Exception while sending transaction, will be retried: %r',
-                    e,
+                    'Exception while sending transaction, will be retried',
                 )
                 return tx_hash
 
@@ -471,8 +457,8 @@ class SCIImplementation(SmartContractsInterface):
             while not self._monitor_cv.wait(timeout=15):
                 try:
                     self._monitor_blockchain_single()
-                except Exception as e:
-                    logger.exception('Blockchain monitor exception: %r', e)
+                except Exception:  # pylint: disable=broad-except
+                    logger.exception('Blockchain monitor exception')
 
     def _monitor_blockchain_single(self):
         if not self._update_block_numbers():
@@ -497,12 +483,13 @@ class SCIImplementation(SmartContractsInterface):
         self._confirmed_block = confirmed_block
         return True
 
-    def _on_event(self, event, cb) -> None:
+    @staticmethod
+    def _on_event(event, cb) -> None:
         logger.info('Detected event %s', event)
         try:
             cb(event)
-        except Exception as e:
-            logger.exception('Event callback exception: %r', e)
+        except Exception:  # pylint: disable=broad-except
+            logger.exception('Event callback exception')
 
     def _pull_subscription_events(self) -> None:
         with self._subs_lock:
@@ -521,10 +508,9 @@ class SCIImplementation(SmartContractsInterface):
                 for log in logs:
                     self._on_event(sub.event_cls(log), sub.cb)
                 sub.last_pulled_block = self._confirmed_block
-            except Exception as e:
+            except Exception:  # pylint: disable=broad-except
                 logger.exception(
-                    'Exception while processing subscription: %r',
-                    e,
+                    'Exception while processing subscription',
                 )
 
     def _find_incoming_eth_transfers(
@@ -598,21 +584,18 @@ class SCIImplementation(SmartContractsInterface):
                 for t in transfers:
                     self._on_event(t, sub.cb)
                 sub.last_pulled_block = self._confirmed_block
-            except Exception as e:
-                if (
-                        _is_jsonrpc_error(e)
-                        and 'missing trie node' in e.args[0]['message']
-                ):
-                    log = logger.warning
-                    # we cannot do anything here
-                    # so let's just bump the pointer
-                    # so that we don't poll the geth node repeatedly
-                    sub.last_pulled_block = self._confirmed_block
-                else:
-                    log = logger.exception
-                log(
-                    'Exception while processing eth subscription: %r',
+            except exceptions.MissingTrieNode as e:
+                # we cannot do anything here
+                # so let's just bump the pointer
+                # so that we don't poll the geth node repeatedly
+                sub.last_pulled_block = self._confirmed_block
+                logger.warning(
+                    'Error while processing eth subscription: %r',
                     e,
+                )
+            except Exception:  # pylint: disable=broad-except
+                logger.exception(
+                    'Error while processing eth subscription',
                 )
 
     def _process_awaiting_transactions(self) -> None:
@@ -627,11 +610,10 @@ class SCIImplementation(SmartContractsInterface):
                 return False
             try:
                 cb(receipt)
-            except Exception as e:
+            except Exception:  # pylint: disable=broad-except
                 logger.exception(
-                    'Confirmed transaction %r callback error: %r',
+                    'Confirmed transaction %r callback error',
                     tx_hash,
-                    e,
                 )
             return True
 
@@ -659,11 +641,10 @@ class SCIImplementation(SmartContractsInterface):
                         if tx_res is None:
                             logger.info('Resending transaction %r', tx_hash)
                             self._geth_client.send(tx)
-                except Exception as e:
+                except Exception:  # pylint: disable=broad-except
                     logger.warning(
-                        "Exception while resending transaction %s: %r",
+                        "Exception while resending transaction %s",
                         tx_hash,
-                        e,
                     )
 
     ########################
@@ -709,7 +690,7 @@ class SCIImplementation(SmartContractsInterface):
     # Concent specific methods #
     ############################
 
-    def force_subtask_payment(
+    def force_subtask_payment(  # pylint: disable=too-many-arguments
             self,
             requestor_address: str,
             provider_address: str,

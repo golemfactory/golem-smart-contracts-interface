@@ -270,6 +270,9 @@ class SmartContractsInterface(object, metaclass=abc.ABCMeta):
             provider_address: str,
             value: int,
             subtask_id: bytes,
+            v: int,
+            r: bytes,
+            s: bytes,
             reimburse_amount: int) -> str:
         pass
 
