@@ -496,7 +496,7 @@ class SCIImplementation(SmartContractsInterface):
         )
         for step in steps:
             if self._monitor_started:
-                logger.debug("SCI monitor: step %s", )
+                logger.debug("SCI monitor: step %s", step.__name__)
                 step()
 
     def _update_gas_price(self) -> None:
