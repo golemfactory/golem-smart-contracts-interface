@@ -377,7 +377,6 @@ class SCIImplementation(SmartContractsInterface):
         self._monitor_started = False
         with self._monitor_cv:
             self._monitor_cv.notify()
-        logger.debug("SCI monitor: stopped")
 
     def _call(self, method) -> Any:
         return method.call(
@@ -474,6 +473,7 @@ class SCIImplementation(SmartContractsInterface):
 
     def _monitor_blockchain(self):
         logger.debug("SCI monitor: started")
+
         self._monitor_started = True
         with self._monitor_cv:
             while self._monitor_started \
@@ -482,6 +482,8 @@ class SCIImplementation(SmartContractsInterface):
                     self._monitor_blockchain_single()
                 except Exception as e:
                     logger.exception('Blockchain monitor exception: %r', e)
+
+        logger.debug("SCI monitor: stopped")
 
     def _monitor_blockchain_single(self):
         if not self._update_block_numbers():
