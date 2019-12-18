@@ -117,6 +117,7 @@ class SCIImplementation(SmartContractsInterface):
         def sign_tx(tx) -> None:
             tx.sign(private_key)
         """
+        logger.debug("Starting SCI")
         self._geth_client = geth_client
         self._address = address
 
@@ -161,6 +162,7 @@ class SCIImplementation(SmartContractsInterface):
 
         self._monitor_thread = None
         self._monitor_cv = threading.Condition()
+        self._monitor_started = False
         if monitor:
             self._monitor_thread = threading.Thread(
                 target=self._monitor_blockchain,
@@ -369,7 +371,10 @@ class SCIImplementation(SmartContractsInterface):
         return self._geth_client.is_synchronized()
 
     def stop(self) -> None:
+        logger.debug("Stopping SCI")
         self._geth_client.stop()
+        logger.debug("SCI monitor: stopping")
+        self._monitor_started = False
         with self._monitor_cv:
             self._monitor_cv.notify()
 
@@ -467,21 +472,34 @@ class SCIImplementation(SmartContractsInterface):
             ))
 
     def _monitor_blockchain(self):
+        logger.debug("SCI monitor: started")
+
+        self._monitor_started = True
         with self._monitor_cv:
-            while not self._monitor_cv.wait(timeout=15):
+            while self._monitor_started \
+                    and not self._monitor_cv.wait(timeout=15):
                 try:
                     self._monitor_blockchain_single()
                 except Exception as e:
                     logger.exception('Blockchain monitor exception: %r', e)
 
+        logger.debug("SCI monitor: stopped")
+
     def _monitor_blockchain_single(self):
         if not self._update_block_numbers():
             return
-        self._update_gas_price()
-        self._pull_subscription_events()
-        self._pull_eth_subscription_events()
-        self._process_awaiting_transactions()
-        self._process_sent_transactions()
+        logger.debug("SCI monitor: block updated")
+        steps = (
+            self._update_gas_price,
+            self._pull_subscription_events,
+            self._pull_eth_subscription_events,
+            self._process_awaiting_transactions,
+            self._process_sent_transactions,
+        )
+        for step in steps:
+            if self._monitor_started:
+                logger.debug("SCI monitor: step %s", step.__name__)
+                step()
 
     def _update_gas_price(self) -> None:
         self._gas_price = max(
@@ -508,6 +526,8 @@ class SCIImplementation(SmartContractsInterface):
         with self._subs_lock:
             subs = self._subscriptions.copy()
         for sub in subs:
+            if not self._monitor_started:
+                break
             try:
                 if sub.last_pulled_block >= self._confirmed_block:
                     continue
@@ -587,6 +607,8 @@ class SCIImplementation(SmartContractsInterface):
         with self._eth_subs_lock:
             subs = self._eth_subscriptions.copy()
         for sub in subs:
+            if not self._monitor_started:
+                break
             try:
                 if sub.last_pulled_block >= self._confirmed_block:
                     continue
