@@ -45,6 +45,7 @@ class SCIImplementationTest(unittest.TestCase):
             self.contract_addresses,
             self.sign_tx,
             monitor=False)
+        self.sci._monitor_started = True
         self.gntb = self.contracts[self.contract_addresses[contracts.GNTB]]
 
     def test_eth_address(self):
