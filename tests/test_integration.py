@@ -321,6 +321,7 @@ class TestIntegration(IntegrationBase):
                 tx_storage,
                 self.contract_addresses,
             )
+            self.user_sci._monitor_started = True
             self.concent_sci = None
         self._fund_account(self.user_sci.get_eth_address())
         self._wait_for_pending()
