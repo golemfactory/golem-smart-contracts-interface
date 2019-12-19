@@ -1,8 +1,9 @@
+#!/usr/bin/env python3
 from setuptools import setup
 
 setup(
     name='Golem-Smart-Contracts-Interface',
-    version='1.10.4',
+    version='1.11.0',
     url='https://github.com/golemfactory/golem-smart-contracts-interface',
     maintainer='The Golem team',
     maintainer_email='tech@golem.network',
