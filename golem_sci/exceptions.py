@@ -27,7 +27,7 @@ def map_geth_error(e: Exception) -> Exception:
     return error_class(*e.args, code=code, message=message)
 
 
-def errorize():
+def map_errors():
     def wrapped(f):
         @functools.wraps(f)
         def curry(*args, **kwargs):

@@ -37,7 +37,7 @@ class Client(object):
         self._sync = False
         self._is_stopped = False
 
-    @exceptions.errorize()
+    @exceptions.map_errors()
     def get_peer_count(self):
         """
         Get peers count
@@ -70,7 +70,7 @@ class Client(object):
             timestamp = last_block.timestamp
         return get_timestamp_utc() - timestamp > 120
 
-    @exceptions.errorize()
+    @exceptions.map_errors()
     def get_block(
             self,
             block: Union[int, str],
@@ -78,7 +78,7 @@ class Client(object):
     ):
         return self.web3.eth.getBlock(block, full_transactions)
 
-    @exceptions.errorize()
+    @exceptions.map_errors()
     def get_transaction_count(self, address):
         """
         Returns the number of transactions that have been sent from account.
@@ -90,11 +90,11 @@ class Client(object):
         """
         return self.web3.eth.getTransactionCount(address, 'pending')
 
-    @exceptions.errorize()
+    @exceptions.map_errors()
     def estimate_gas(self, tx: Dict[str, Any]) -> int:
         return self.web3.eth.estimateGas(tx)
 
-    @exceptions.errorize()
+    @exceptions.map_errors()
     def send(self, transaction) -> str:
         """
         Sends signed Ethereum transaction.
@@ -104,7 +104,7 @@ class Client(object):
         hex_data = self.web3.toHex(raw_data)
         return self.web3.eth.sendRawTransaction(hex_data).hex()
 
-    @exceptions.errorize()
+    @exceptions.map_errors()
     def get_balance(self, account, block=None):
         """
         Returns the balance of the given account
@@ -117,11 +117,11 @@ class Client(object):
         """
         return self.web3.eth.getBalance(account, block)
 
-    @exceptions.errorize()
+    @exceptions.map_errors()
     def get_gas_price(self) -> int:
         return self.web3.eth.gasPrice
 
-    @exceptions.errorize()
+    @exceptions.map_errors()
     def call(  # pylint: disable=too-many-arguments
             self,
             _from=None,
@@ -168,11 +168,11 @@ class Client(object):
         }
         return self.web3.eth.call(obj, block)
 
-    @exceptions.errorize()
+    @exceptions.map_errors()
     def get_block_number(self):
         return self.web3.eth.blockNumber
 
-    @exceptions.errorize()
+    @exceptions.map_errors()
     def get_transaction(self, tx_hash):
         """
         Returns a transaction matching the given transaction hash.
@@ -181,7 +181,7 @@ class Client(object):
         """
         return self.web3.eth.getTransaction(tx_hash)
 
-    @exceptions.errorize()
+    @exceptions.map_errors()
     def get_transaction_receipt(self, tx_hash):
         """
         Returns the receipt of a transaction by transaction hash.
@@ -190,7 +190,7 @@ class Client(object):
         """
         return self.web3.eth.getTransactionReceipt(tx_hash)
 
-    @exceptions.errorize()
+    @exceptions.map_errors()
     def new_filter(self, from_block="latest", to_block="latest", address=None,
                    topics=None):
         """
@@ -220,7 +220,7 @@ class Client(object):
         }
         return self.web3.eth.filter(obj).filter_id
 
-    @exceptions.errorize()
+    @exceptions.map_errors()
     def get_filter_changes(self, filter_id):
         """
         Polling method for a filter,
@@ -232,7 +232,7 @@ class Client(object):
         """
         return self.web3.eth.getFilterChanges(filter_id)
 
-    @exceptions.errorize()
+    @exceptions.map_errors()
     def get_filter_logs(self, filter_id):
         """
         Polling method for a filter which returns an array of all matching logs
@@ -242,7 +242,7 @@ class Client(object):
         """
         return self.web3.eth.getFilterLogs(filter_id)
 
-    @exceptions.errorize()
+    @exceptions.map_errors()
     def get_logs(  # pylint: disable=too-many-arguments
             self,
             contract,
@@ -265,7 +265,7 @@ class Client(object):
         )
         return self.web3.eth.getLogs(filter_args)
 
-    @exceptions.errorize()
+    @exceptions.map_errors()
     def contract(self, address, abi):
         return self.web3.eth.contract(address=address, abi=json.loads(abi))
 
