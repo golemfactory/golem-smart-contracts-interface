@@ -213,6 +213,7 @@ class IntegrationBase(TestCase):
                 self.contract_addresses,
                 sign_tx_user,
             )
+            self.user_sci._monitor_started = True
 
             def sign_tx_concent(tx):
                 tx.sign(concent_privkey)
