@@ -1,20 +1,18 @@
 import json
 import logging
-import pytz
-import rlp
 import time
 from calendar import timegm
 from datetime import datetime
 from typing import Any, Dict, Union
 
 from ethereum.utils import zpad
+import pytz
+import rlp
 from web3.utils.filters import construct_event_filter_params
 
+from . import exceptions
+
 logger = logging.getLogger(__name__)
-
-
-class FilterNotFoundException(Exception):
-    pass
 
 
 def datetime_to_timestamp(then):
@@ -39,6 +37,7 @@ class Client(object):
         self._sync = False
         self._is_stopped = False
 
+    @exceptions.map_errors()
     def get_peer_count(self):
         """
         Get peers count
@@ -62,8 +61,8 @@ class Client(object):
         # node may not have started syncing yet
         try:
             last_block = self.get_block('latest')
-        except Exception as ex:
-            logger.debug(ex)
+        except Exception as e:  # pylint: disable=broad-except
+            logger.debug('Error while getting block. Ignoring', exc_info=e)
             return False
         if isinstance(last_block, dict):
             timestamp = int(last_block['timestamp'])
@@ -71,9 +70,15 @@ class Client(object):
             timestamp = last_block.timestamp
         return get_timestamp_utc() - timestamp > 120
 
-    def get_block(self, block: Union[int, str], full_transactions: bool=False):
+    @exceptions.map_errors()
+    def get_block(
+            self,
+            block: Union[int, str],
+            full_transactions: bool = False,
+    ):
         return self.web3.eth.getBlock(block, full_transactions)
 
+    @exceptions.map_errors()
     def get_transaction_count(self, address):
         """
         Returns the number of transactions that have been sent from account.
@@ -85,9 +90,11 @@ class Client(object):
         """
         return self.web3.eth.getTransactionCount(address, 'pending')
 
+    @exceptions.map_errors()
     def estimate_gas(self, tx: Dict[str, Any]) -> int:
         return self.web3.eth.estimateGas(tx)
 
+    @exceptions.map_errors()
     def send(self, transaction) -> str:
         """
         Sends signed Ethereum transaction.
@@ -97,6 +104,7 @@ class Client(object):
         hex_data = self.web3.toHex(raw_data)
         return self.web3.eth.sendRawTransaction(hex_data).hex()
 
+    @exceptions.map_errors()
     def get_balance(self, account, block=None):
         """
         Returns the balance of the given account
@@ -109,11 +117,21 @@ class Client(object):
         """
         return self.web3.eth.getBalance(account, block)
 
+    @exceptions.map_errors()
     def get_gas_price(self) -> int:
         return self.web3.eth.gasPrice
 
-    def call(self, _from=None, to=None, gas=90000, gas_price=3000, value=0,
-             data=None, block=None):
+    @exceptions.map_errors()
+    def call(  # pylint: disable=too-many-arguments
+            self,
+            _from=None,
+            to=None,
+            gas=90000,
+            gas_price=3000,
+            value=0,
+            data=None,
+            block=None,
+    ):
         """
         Executes a message call transaction,
         which is directly executed in the VM of the node,
@@ -150,9 +168,11 @@ class Client(object):
         }
         return self.web3.eth.call(obj, block)
 
+    @exceptions.map_errors()
     def get_block_number(self):
         return self.web3.eth.blockNumber
 
+    @exceptions.map_errors()
     def get_transaction(self, tx_hash):
         """
         Returns a transaction matching the given transaction hash.
@@ -161,6 +181,7 @@ class Client(object):
         """
         return self.web3.eth.getTransaction(tx_hash)
 
+    @exceptions.map_errors()
     def get_transaction_receipt(self, tx_hash):
         """
         Returns the receipt of a transaction by transaction hash.
@@ -169,6 +190,7 @@ class Client(object):
         """
         return self.web3.eth.getTransactionReceipt(tx_hash)
 
+    @exceptions.map_errors()
     def new_filter(self, from_block="latest", to_block="latest", address=None,
                    topics=None):
         """
@@ -188,8 +210,8 @@ class Client(object):
         :return: filter id
         """
         if topics is not None:
-            for i in range(len(topics)):
-                topics[i] = Client.__add_padding(topics[i])
+            for i, topic in enumerate(topics[:]):
+                topics[i] = self.__add_padding(topic)
         obj = {
             'fromBlock': from_block,
             'toBlock': to_block,
@@ -198,6 +220,7 @@ class Client(object):
         }
         return self.web3.eth.filter(obj).filter_id
 
+    @exceptions.map_errors()
     def get_filter_changes(self, filter_id):
         """
         Polling method for a filter,
@@ -207,10 +230,9 @@ class Client(object):
         Returns all new entries which occurred since the
         last call to this method for the given filter_id
         """
-        return Client._convert_filter_not_found_error(
-            lambda: self.web3.eth.getFilterChanges(filter_id),
-        )
+        return self.web3.eth.getFilterChanges(filter_id)
 
+    @exceptions.map_errors()
     def get_filter_logs(self, filter_id):
         """
         Polling method for a filter which returns an array of all matching logs
@@ -218,20 +240,10 @@ class Client(object):
         :return:
         Returns all entries which match the filter
         """
-        return Client._convert_filter_not_found_error(
-            lambda: self.web3.eth.getFilterLogs(filter_id),
-        )
+        return self.web3.eth.getFilterLogs(filter_id)
 
-    @staticmethod
-    def _convert_filter_not_found_error(f):
-        try:
-            return f()
-        except ValueError as e:
-            if e.args[0]['message'] == 'filter not found':
-                raise FilterNotFoundException()
-            raise e
-
-    def get_logs(
+    @exceptions.map_errors()
+    def get_logs(  # pylint: disable=too-many-arguments
             self,
             contract,
             event_name: str,
@@ -253,6 +265,7 @@ class Client(object):
         )
         return self.web3.eth.getLogs(filter_args)
 
+    @exceptions.map_errors()
     def contract(self, address, abi):
         return self.web3.eth.contract(address=address, abi=json.loads(abi))
 
@@ -261,7 +274,7 @@ class Client(object):
             try:
                 if self.is_synchronized():
                     return
-            except Exception as e:
+            except Exception as e:  # pylint: disable=broad-except
                 logger.error(
                     "Error while syncing with eth blockchain: %r", e)
             else:
