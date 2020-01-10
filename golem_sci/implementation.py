@@ -96,7 +96,7 @@ class SCIImplementation(SmartContractsInterface):
     GAS_FAUCET = 90000
     # Concent methods
     GAS_UNLOCK_DEPOSIT = 55000
-    GAS_REIMBURSE = 90000
+    GAS_REIMBURSE = 150000
     GAS_WITHDRAW_DEPOSIT = 75000
 
     REQUIRED_CONFS: ClassVar[int] = 6
