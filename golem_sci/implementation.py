@@ -81,13 +81,13 @@ class SCIImplementation(SmartContractsInterface):
     # Total gas for a batchTransfer is BASE + len(payments) * PER_PAYMENT
     GAS_PER_PAYMENT = 28000
     GAS_BATCH_PAYMENT_BASE = 27000
-    GAS_FAUCET = 40000
+    GAS_FAUCET = 90000
     # Concent methods
     GAS_UNLOCK_DEPOSIT = 55000
     # Total gas for a reimburse is BASE + len(subtasks) * PER_SUBTASK
     GAS_REIMBURSE = 130000
     GAS_REIMBURSE_PER_SUBTASK = 7000
-    GAS_WITHDRAW_DEPOSIT = 45000
+    GAS_WITHDRAW_DEPOSIT = 75000
 
     REQUIRED_CONFS: ClassVar[int] = 6
 
