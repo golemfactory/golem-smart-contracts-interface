@@ -75,7 +75,7 @@ class SCIImplementation(SmartContractsInterface):
 
     GAS_GNT_TRANSFER = 55000
     GAS_WITHDRAW = 75000
-    GAS_OPEN_GATE = 230000
+    GAS_OPEN_GATE = 240000
     GAS_TRANSFER_FROM_GATE = 100000
     GAS_TRANSFER_AND_CALL = 90000
     # Total gas for a batchTransfer is BASE + len(payments) * PER_PAYMENT
@@ -84,7 +84,9 @@ class SCIImplementation(SmartContractsInterface):
     GAS_FAUCET = 90000
     # Concent methods
     GAS_UNLOCK_DEPOSIT = 55000
-    GAS_REIMBURSE = 90000
+    # Total gas for a reimburse is BASE + len(subtasks) * PER_SUBTASK
+    GAS_REIMBURSE = 130000
+    GAS_REIMBURSE_PER_SUBTASK = 7000
     GAS_WITHDRAW_DEPOSIT = 75000
 
     REQUIRED_CONFS: ClassVar[int] = 6
@@ -829,7 +831,7 @@ class SCIImplementation(SmartContractsInterface):
                 reimburse_amount,
                 closure_time,
             ],
-            self.GAS_REIMBURSE + len(value) * 5000,
+            self.GAS_REIMBURSE + len(value) * self.GAS_REIMBURSE_PER_SUBTASK,
         )
 
     def get_forced_payments(
