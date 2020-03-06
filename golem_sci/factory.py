@@ -4,6 +4,23 @@ import time
 from typing import Callable, Dict
 
 from distutils.version import StrictVersion
+from ethereum import slogging
+
+# ethereum.slogging and logging compatibility patch
+orig_getLogger = slogging.SManager.getLogger
+
+
+def monkey_patched_getLogger(*args, **kwargs):
+    orig_class = logging.getLoggerClass()
+    result = orig_getLogger(*args, **kwargs)
+    logging.setLoggerClass(orig_class)
+    return result
+
+
+slogging.SManager.getLogger = monkey_patched_getLogger
+
+# pylint: disable=wrong-import-position
+
 from ethereum.transactions import Transaction
 from web3 import Web3, IPCProvider, HTTPProvider
 from web3.middleware import geth_poa_middleware
