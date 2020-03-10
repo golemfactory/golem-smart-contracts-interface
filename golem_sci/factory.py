@@ -4,6 +4,9 @@ import time
 from typing import Callable, Dict
 
 from distutils.version import StrictVersion
+
+# this must be before any other ethereum imports
+from . import fix_logging
 from ethereum.transactions import Transaction
 from web3 import Web3, IPCProvider, HTTPProvider
 from web3.middleware import geth_poa_middleware
