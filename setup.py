@@ -1,9 +1,22 @@
 #!/usr/bin/env python3
+import pathlib
+
 from setuptools import setup
+
+try:
+    from version import get_version
+except ImportError:
+    def get_version(cwd, **_kwargs):
+        p = pathlib.Path(cwd) / 'RELEASE-VERSION'
+        with p.open('r') as f:
+            return f.read()
+
+version_cwd = str(pathlib.Path(__file__).parent / 'golem_sci')
+
 
 setup(
     name='Golem-Smart-Contracts-Interface',
-    version='1.11.2',
+    version=get_version(prefix='v', cwd=version_cwd),
     url='https://github.com/golemfactory/golem-smart-contracts-interface',
     maintainer='The Golem team',
     maintainer_email='tech@golem.network',
