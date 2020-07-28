@@ -69,8 +69,8 @@ class EthSubscription:
 
 
 class SCIImplementation(SmartContractsInterface):
-    # Gas price: 20 gwei, Homestead suggested gas price.
-    GAS_PRICE = 20 * 10 ** 9
+    # Max Gas price: 100 gwei
+    GAS_PRICE = 100 * 10 ** 9
     GAS_PRICE_MIN = 10 ** 8
 
     GAS_GNT_TRANSFER = 55000
