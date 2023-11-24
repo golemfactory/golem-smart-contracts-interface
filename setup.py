@@ -26,7 +26,7 @@ setup(
     python_requires='>=3.6',
     install_requires=[
         'ethereum==1.6.1',
-        'eth-abi==1.1.1',
+        'eth-abi==4.2.0',
         'eth-keyfile==0.5.1',
         'eth-keys==0.2.0b3',
         'eth-utils==1.0.3',
